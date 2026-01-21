@@ -4,9 +4,9 @@ import plotly.express as px
 
 # 1. Sheet Configuration
 SHEETS_DICT = {
-    "Bas Tamat Operasi": "1SRlxQQ9OFQJyXDFAP2I2bAKEh2ACc9czqdKvysLWP64",
-    "Operasi Di Laluan": "1QmdnNFHxIG1o-JeGN_mR9QgdbXc76lFurzh2cgot9gE",
-    "Peraturan Memperlahankan Pemanduan dan Memberhentikan Bas Di Setiap Hentian": "1P1ThhQJ49Bl9Rh13Aq_rX9eysxDTJFdJL0pX45EGils"
+    "Sheet 1": "1SRlxQQ9OFQJyXDFAP2I2bAKEh2ACc9czqdKvysLWP64",
+    "Sheet 2": "1QmdnNFHxIG1o-JeGN_mR9QgdbXc76lFurzh2cgot9gE",
+    "Sheet 3": "1P1ThhQJ49Bl9Rh13Aq_rX9eysxDTJFdJL0pX45EGils"
 }
 
 st.set_page_config(page_title="Depoh Analysis", layout="wide")
@@ -18,49 +18,53 @@ def load_single_sheet(sheet_id):
 
 st.title("📊 Staff Analysis by Depoh")
 
-# 2. Sidebar Selection
+# Sidebar Selection
 selection = st.sidebar.selectbox("Select Sheet to Analyze:", list(SHEETS_DICT.keys()))
 selected_id = SHEETS_DICT[selection]
 
 try:
     df = load_single_sheet(selected_id)
-    
-    # Standardize column names to lowercase to avoid errors (optional but safer)
-    df.columns = [c.lower() for c in df.columns]
+    df.columns = [c.lower().strip() for c in df.columns]
 
     if 'id pekerja' in df.columns and 'depoh' in df.columns:
         
-        # 3. Calculation: Unique ID PEKERJA per DEPOH
-        # We group by Depoh and count unique staff IDs
+        # Calculation: Unique ID PEKERJA per DEPOH
         depoh_stats = df.groupby('depoh')['id pekerja'].nunique().reset_index()
         depoh_stats.columns = ['Depoh Name', 'Unique Staff Count']
 
-        # 4. Layout: Metrics and Pie Chart
         col1, col2 = st.columns([1, 2])
 
         with col1:
-            st.metric("Grand Total Unique Staff", depoh_stats['Unique Staff Count'].sum())
-            st.write("### Data Breakdown")
-            st.dataframe(depoh_stats, hide_index=True)
+            st.write("### Summary")
+            st.metric("Total Unique Staff", depoh_stats['Unique Staff Count'].sum())
+            st.dataframe(depoh_stats, hide_index=True, use_container_width=True)
 
         with col2:
-            # 5. Create the Pie Chart
+            # 2. Make the Chart "Thin" (Donut style)
             fig = px.pie(
                 depoh_stats, 
                 values='Unique Staff Count', 
                 names='Depoh Name',
-                title=f"Distribution of Unique Staff by Depoh ({selection})",
-                hole=0.3  # Optional: makes it a donut chart for better looks
+                hole=0.7, # Higher number (0.7-0.8) makes the ring thinner
+                color_discrete_sequence=px.colors.qualitative.Pastel # Professional colors
             )
+            
+            # 3. Adjusting the layout for a sleek look
+            fig.update_traces(textinfo='percent+label', textposition='outside')
+            fig.update_layout(
+                showlegend=False, 
+                height=400, 
+                margin=dict(t=20, b=20, l=20, r=20)
+            )
+            
             st.plotly_chart(fig, use_container_width=True)
             
         st.divider()
-        st.subheader(f"Raw Data Preview: {selection}")
+        st.subheader("Raw Data Preview")
         st.dataframe(df, use_container_width=True)
 
     else:
-        st.error("Error: Could not find 'id pekerja' or 'depoh' columns in this sheet.")
-        st.write("Found columns:", list(df.columns))
+        st.error("Check column names: Ensure 'id pekerja' and 'depoh' exist.")
 
 except Exception as e:
-    st.error(f"Failed to load {selection}. Please check your Sheet IDs and ensure they are shared 'Anyone with link'.")
+    st.error(f"Error: {e}")
