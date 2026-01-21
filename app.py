@@ -1,41 +1,60 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px  # We use plotly for nice interactive pie charts
 
-# List your 10 Sheet IDs here
+# 1. YOUR REAL IDs ONLY
 SHEET_IDS = [
-    "1SRlxQQ9OFQJyXDFAP2I2bAKEh2ACc9czqdKvysLWP64",  # ID from Sheet 1
-    "1QmdnNFHxIG1o-JeGN_mR9QgdbXc76lFurzh2cgot9gE",  # ID from Sheet 2
-    "1P1ThhQJ49Bl9Rh13Aq_rX9eysxDTJFdJL0pX45EGils",         # ID from Sheet 3
+    "1SRlxQQ9OFQJyXDFAP2I2bAKEh2ACc9czqdKvysLWP64",
+    "1QmdnNFHxIG1o-JeGN_mR9QgdbXc76lFurzh2cgot9gE",
+    "1P1ThhQJ49Bl9Rh13Aq_rX9eysxDTJFdJL0pX45EGils"
 ]
 
-# This keeps the app fast by remembering data for 10 minutes
 @st.cache_data(ttl=600)
 def load_and_combine_data(ids):
     all_data = []
     for sid in ids:
-        # Direct link to pull live data
         url = f"https://docs.google.com/spreadsheets/d/{sid}/export?format=csv"
         df = pd.read_csv(url)
         all_data.append(df)
     return pd.concat(all_data, ignore_index=True)
 
-st.title("📈 Executive Multi-Sheet Dashboard")
+st.title("📈 HR & Depoh Dashboard")
 
 try:
-    # Pull the live data
     df = load_and_combine_data(SHEET_IDS)
     
-    # 1. Show high-level metrics
-    st.subheader("Quick Stats")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Entries", len(df))
-    # Change 'Amount' to a column name you actually have in your sheets
-    if 'Amount' in df.columns:
-        col2.metric("Total Value", f"${df['Amount'].sum():,.2f}")
+    # --- METRICS SECTION ---
+    st.subheader("General Overview")
+    col1, col2 = st.columns(2)
     
-    # 2. Show the data table
-    st.subheader("Raw Data (All 10 Sheets Combined)")
-    st.dataframe(df, use_container_width=True)
+    # Count unique ID Pekerja
+    total_staff = df['id pekerja'].nunique()
+    col1.metric("Total Staff (Unique)", total_staff)
+    
+    # Count unique Depoh
+    total_depoh_count = df['depoh'].nunique()
+    col2.metric("Total Active Depoh", total_depoh_count)
+
+    # --- PIE CHART SECTION ---
+    st.divider()
+    chart_col1, chart_col2 = st.columns(2)
+
+    with chart_col1:
+        st.subheader("Staff Distribution")
+        # Pie chart for ID Pekerja (Total Staff)
+        fig_staff = px.pie(df, names='id pekerja', title='Total Staff ID Breakdown')
+        st.plotly_chart(fig_staff, use_container_width=True)
+
+    with chart_col2:
+        st.subheader("Depoh Distribution")
+        # Pie chart for Depoh
+        fig_depoh = px.pie(df, names='depoh', title='Staff Count by Depoh')
+        st.plotly_chart(fig_depoh, use_container_width=True)
+
+    # Show raw data
+    with st.expander("View Combined Data"):
+        st.write(df)
 
 except Exception as e:
-    st.error("Error connecting to Google Sheets. Check your Sheet IDs and Sharing settings.")
+    st.error(f"Error: {e}")
+    st.info("Check if column names 'id pekerja' and 'depoh' exist in all sheets.")
