@@ -3,8 +3,16 @@ import pandas as pd
 
 # List your 10 Sheet IDs here
 SHEET_IDS = [
-    "ID_1", "ID_2", "ID_3", "ID_4", "ID_5",
-    "ID_6", "ID_7", "ID_8", "ID_9", "ID_10"
+    "1A2b3C4d5E6f7G8h9I0jKLmNoPqRsTuVw",  # ID from Sheet 1
+    "9Z8y7X6w5V4u3T2s1R0qPlMnOkJihGfE",  # ID from Sheet 2
+    "AnotherLongIDStringHere_3",         # ID from Sheet 3
+    "AnotherLongIDStringHere_4",         # ID from Sheet 4
+    "AnotherLongIDStringHere_5",         # ID from Sheet 5
+    "AnotherLongIDStringHere_6",         # ID from Sheet 6
+    "AnotherLongIDStringHere_7",         # ID from Sheet 7
+    "AnotherLongIDStringHere_8",         # ID from Sheet 8
+    "AnotherLongIDStringHere_9",         # ID from Sheet 9
+    "AnotherLongIDStringHere_10"         # ID from Sheet 10
 ]
 
 # This keeps the app fast by remembering data for 10 minutes
