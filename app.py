@@ -4,9 +4,9 @@ import plotly.express as px
 
 # 1. Sheet Configuration
 SHEETS_DICT = {
-    "Sheet 1": "1SRlxQQ9OFQJyXDFAP2I2bAKEh2ACc9czqdKvysLWP64",
-    "Sheet 2": "1QmdnNFHxIG1o-JeGN_mR9QgdbXc76lFurzh2cgot9gE",
-    "Sheet 3": "1P1ThhQJ49Bl9Rh13Aq_rX9eysxDTJFdJL0pX45EGils"
+    "Bas Tamat Operasi": "1SRlxQQ9OFQJyXDFAP2I2bAKEh2ACc9czqdKvysLWP64",
+    "Operasi Di Laluan": "1QmdnNFHxIG1o-JeGN_mR9QgdbXc76lFurzh2cgot9gE",
+    "Peraturan Memperlahankan Pemanduan dan Memberhentikan Bas Di Setiap Hentian": "1P1ThhQJ49Bl9Rh13Aq_rX9eysxDTJFdJL0pX45EGils"
 }
 
 st.set_page_config(page_title="Depoh Analysis", layout="wide")
