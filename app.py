@@ -6,13 +6,6 @@ SHEET_IDS = [
     "1SRlxQQ9OFQJyXDFAP2I2bAKEh2ACc9czqdKvysLWP64",  # ID from Sheet 1
     "1QmdnNFHxIG1o-JeGN_mR9QgdbXc76lFurzh2cgot9gE",  # ID from Sheet 2
     "1P1ThhQJ49Bl9Rh13Aq_rX9eysxDTJFdJL0pX45EGils",         # ID from Sheet 3
-    "AnotherLongIDStringHere_4",         # ID from Sheet 4
-    "AnotherLongIDStringHere_5",         # ID from Sheet 5
-    "AnotherLongIDStringHere_6",         # ID from Sheet 6
-    "AnotherLongIDStringHere_7",         # ID from Sheet 7
-    "AnotherLongIDStringHere_8",         # ID from Sheet 8
-    "AnotherLongIDStringHere_9",         # ID from Sheet 9
-    "AnotherLongIDStringHere_10"         # ID from Sheet 10
 ]
 
 # This keeps the app fast by remembering data for 10 minutes
