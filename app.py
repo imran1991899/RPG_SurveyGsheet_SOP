@@ -65,22 +65,22 @@ def load_all_data():
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
     return all_dfs
 
-# --- HIGHLIGHTING LOGIC (Lighter with 50% Opacity) ---
+# --- CORRECTED HIGHLIGHTING LOGIC (Using Score, 50% Opacity) ---
 def highlight_merit(row):
     score = row['Total Post']
     color = '' 
     
-    # Using rgba for 50% opacity (0.5)
+    # Based on raw score 0-25 as per your Merit Reference Table
     if 0 <= score <= 5:
-        color = 'background-color: rgba(255, 0, 0, 0.5); color: white;'     # Red 50%
+        color = 'background-color: rgba(255, 0, 0, 0.5); color: white;'     # RED
     elif 6 <= score <= 10:
-        color = 'background-color: rgba(255, 255, 0, 0.3); color: white;'   # Yellow 30% (Yellow at 0.5 is very bright)
+        color = 'background-color: rgba(255, 255, 0, 0.5); color: black;'   # YELLOW
     elif 11 <= score <= 15:
-        color = 'background-color: rgba(255, 165, 0, 0.5); color: white;'   # Orange 50%
+        color = 'background-color: rgba(255, 165, 0, 0.5); color: white;'   # ORANGE
     elif 16 <= score <= 20:
-        color = 'background-color: rgba(0, 191, 255, 0.5); color: white;'   # Blue 50%
+        color = 'background-color: rgba(0, 191, 255, 0.5); color: white;'   # BLUE
     elif 21 <= score <= 25:
-        color = 'background-color: rgba(0, 128, 0, 0.5); color: white;'     # Green 50%
+        color = 'background-color: rgba(0, 128, 0, 0.5); color: white;'     # GREEN
     
     return [color] * len(row)
 
@@ -179,12 +179,12 @@ if page == "Main Summary":
         format_dict = {c: "{:.0f}" for c in short_names} 
         format_dict.update({c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']})
         
-        # Applying styling with rgba colors
+        # Applying styling
         styled_df = final_df[show_cols].style.apply(highlight_merit, axis=1).format(format_dict)
         
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-        # --- NEW MERIT REFERENCE TABLE ---
+        # --- MERIT REFERENCE TABLE ---
         st.markdown("<br>", unsafe_allow_html=True)
         col_merit_1, col_merit_2 = st.columns([1, 2])
         with col_merit_1:
