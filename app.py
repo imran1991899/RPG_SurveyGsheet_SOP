@@ -41,9 +41,8 @@ def load_all_data():
 
 raw_data = load_all_data()
 
-# --- SIDEBAR: DATE SELECTION & RESET ---
+# --- SIDEBAR: DATE SELECTION ---
 st.sidebar.title("📅 Filters")
-
 all_dates = []
 for df in raw_data.values():
     if not df.empty and 'timestamp' in df.columns:
@@ -51,24 +50,12 @@ for df in raw_data.values():
 
 if all_dates:
     min_date, max_date = min(all_dates), max(all_dates)
-    
-    # Initialize session state for date range if not present
     if 'date_range' not in st.session_state:
         st.session_state.date_range = (min_date, max_date)
-
-    # Reset Button logic
     if st.sidebar.button("🔄 Reset Dates"):
         st.session_state.date_range = (min_date, max_date)
         st.rerun()
-
-    selected_date_range = st.sidebar.date_input(
-        "Select Date Range:",
-        value=st.session_state.date_range,
-        min_value=min_date,
-        max_value=max_date,
-        key="date_input_key"
-    )
-    # Sync session state with widget
+    selected_date_range = st.sidebar.date_input("Select Date Range:", value=st.session_state.date_range, min_value=min_date, max_value=max_date)
     st.session_state.date_range = selected_date_range
 else:
     selected_date_range = None
@@ -83,73 +70,70 @@ for name, df in raw_data.items():
     else:
         filtered_data[name] = df
 
-# --- SIDEBAR: NAVIGATION ---
+# --- NAVIGATION ---
 st.sidebar.divider()
-st.sidebar.title("🧭 Navigation")
 page_mode = st.sidebar.radio("Go to:", ["Main Summary", "Detailed Sheet View"])
 
 if page_mode == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    # Process "Before" logic (Earliest attempt per ID)
-    summary_dfs = {}
-    for name, df in filtered_data.items():
-        if not df.empty:
-            summary_dfs[name] = df.sort_values('timestamp').groupby('id pekerja').first().reset_index()
-        else:
-            summary_dfs[name] = df
+    # 1. PRE Logic (Earliest attempt)
+    pre_dfs = {name: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() if not df.empty else df for name, df in filtered_data.items()}
+    
+    # 2. POST Logic (Most Recent attempt)
+    post_dfs = {name: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() if not df.empty else df for name, df in filtered_data.items()}
 
-    valid_dfs = [df for df in summary_dfs.values() if not df.empty]
+    valid_dfs = [df for df in pre_dfs.values() if not df.empty]
     if valid_dfs:
         all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in valid_dfs]).drop_duplicates('id pekerja')
         summary_table = all_staff.copy()
         
-        for name in SHEETS_DICT.keys():
-            df = summary_dfs.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))
-            score_sub = df[['id pekerja', 'score_num']].rename(columns={'score_num': name})
-            summary_table = pd.merge(summary_table, score_sub, on='id pekerja', how='left')
+        # Merge module scores for PRE and POST
+        score_cols = list(SHEETS_DICT.keys())
+        for name in score_cols:
+            # Merging PRE scores for each module column
+            pre_score = pre_dfs.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
+            summary_table = pd.merge(summary_table, pre_score, on='id pekerja', how='left')
+            
+            # Merging POST scores into a hidden calculation
+            post_score = post_dfs.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'post_{name}'})
+            summary_table = pd.merge(summary_table, post_score, on='id pekerja', how='left')
         
         summary_table = summary_table.fillna(0.0)
         
-        # --- CALCULATION OVER 25 ---
-        score_cols = list(SHEETS_DICT.keys())
-        max_total_score = 25.0 
+        # --- CALCULATIONS OVER 25 ---
+        summary_table['Total Pre-Sc'] = summary_table[score_cols].sum(axis=1).round(1)
+        summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Sc'] / 25.0) * 100).round(1)
         
-        summary_table['Total Pre-Score'] = summary_table[score_cols].sum(axis=1).round(1)
-        summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Score'] / max_total_score) * 100).round(1)
-        summary_table['% LULUS POST'] = 0.0
+        post_cols = [f'post_{name}' for name in score_cols]
+        summary_table['Total Post-Sc'] = summary_table[post_cols].sum(axis=1).round(1)
+        summary_table['% LULUS POST'] = ((summary_table['Total Post-Sc'] / 25.0) * 100).round(1)
 
-        # Metrics
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Staff", len(summary_table))
-        m2.metric("Avg Score %", f"{summary_table['% LULUS PRE'].mean():.1f}%")
-        m3.metric("Depohs Active", summary_table['depoh'].nunique())
-        
-        # Bar Chart
-        st.subheader("📊 Average Performance by Depoh")
-        depoh_perf = summary_table.groupby('depoh')['% LULUS PRE'].mean().reset_index()
-        fig_bar = px.bar(depoh_perf, x='depoh', y='% LULUS PRE', color='depoh', text_auto='.1f')
-        fig_bar.update_layout(height=350, showlegend=False)
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-        # Master Table
-        st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE)")
+        # Table Display
+        st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE vs POST)")
         formatted_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
-        float_cols = score_cols + ['Total Pre-Score', '% LULUS PRE', '% LULUS POST']
+        
+        # Define columns to show (hiding the intermediate post_ module columns)
+        display_cols = ['ID', 'NAMA', 'DEPOH'] + score_cols + ['Total Pre-Sc', '% LULUS PRE', '% LULUS POST']
         
         st.dataframe(
-            formatted_df.style.format({col: "{:.1f}" for col in float_cols}), 
+            formatted_df[display_cols].style.format({col: "{:.1f}" for col in score_cols + ['Total Pre-Sc', '% LULUS PRE', '% LULUS POST']}), 
             use_container_width=True, hide_index=True
         )
+        
+        # Comparison Bar Chart
+        st.subheader("📊 Average Performance: PRE vs POST")
+        avg_data = pd.DataFrame({
+            'Phase': ['PRE', 'POST'],
+            'Average %': [summary_table['% LULUS PRE'].mean(), summary_table['% LULUS POST'].mean()]
+        })
+        fig = px.bar(avg_data, x='Phase', y='Average %', color='Phase', text_auto='.1f', barmode='group')
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No data available for the selected date range.")
-
+        st.info("No data available.")
 else:
-    # --- DETAILED SHEET VIEW ---
     selection = st.sidebar.selectbox("Select Detailed Sheet:", list(SHEETS_DICT.keys()))
     st.title(f"📊 {selection}")
     df_view = filtered_data.get(selection, pd.DataFrame())
-    if df_view.empty:
-        st.warning("No data found for the selected range.")
-    else:
+    if not df_view.empty:
         st.dataframe(df_view.style.format({"score_num": "{:.1f}"}), use_container_width=True)
