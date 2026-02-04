@@ -27,10 +27,8 @@ def load_all_data():
             temp_df.columns = [str(c).lower().strip() for c in temp_df.columns]
             
             if 'id pekerja' in temp_df.columns and 'total score' in temp_df.columns:
-                # Extract score and round to 1 decimal
                 temp_df['score_num'] = temp_df['total score'].astype(str).str.split('/').str[0].astype(float).round(1)
                 
-                # Convert timestamp
                 date_col = 'timestamp' if 'timestamp' in temp_df.columns else 'date'
                 if date_col in temp_df.columns:
                     temp_df['timestamp'] = pd.to_datetime(temp_df[date_col], errors='coerce')
@@ -43,7 +41,7 @@ def load_all_data():
 
 raw_data = load_all_data()
 
-# --- SIDEBAR: DATE SELECTION ---
+# --- SIDEBAR: DATE SELECTION & RESET ---
 st.sidebar.title("📅 Filters")
 
 all_dates = []
@@ -53,12 +51,25 @@ for df in raw_data.values():
 
 if all_dates:
     min_date, max_date = min(all_dates), max(all_dates)
+    
+    # Initialize session state for date range if not present
+    if 'date_range' not in st.session_state:
+        st.session_state.date_range = (min_date, max_date)
+
+    # Reset Button logic
+    if st.sidebar.button("🔄 Reset Dates"):
+        st.session_state.date_range = (min_date, max_date)
+        st.rerun()
+
     selected_date_range = st.sidebar.date_input(
         "Select Date Range:",
-        value=(min_date, max_date),
+        value=st.session_state.date_range,
         min_value=min_date,
-        max_value=max_date
+        max_value=max_date,
+        key="date_input_key"
     )
+    # Sync session state with widget
+    st.session_state.date_range = selected_date_range
 else:
     selected_date_range = None
 
@@ -80,7 +91,7 @@ page_mode = st.sidebar.radio("Go to:", ["Main Summary", "Detailed Sheet View"])
 if page_mode == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    # Process "Before" logic
+    # Process "Before" logic (Earliest attempt per ID)
     summary_dfs = {}
     for name, df in filtered_data.items():
         if not df.empty:
@@ -101,7 +112,7 @@ if page_mode == "Main Summary":
         summary_table = summary_table.fillna(0.0)
         
         # --- CALCULATION OVER 25 ---
-        score_cols = list(SHEETS_DICT.keys()) # All 5 columns
+        score_cols = list(SHEETS_DICT.keys())
         max_total_score = 25.0 
         
         summary_table['Total Pre-Score'] = summary_table[score_cols].sum(axis=1).round(1)
@@ -121,7 +132,7 @@ if page_mode == "Main Summary":
         fig_bar.update_layout(height=350, showlegend=False)
         st.plotly_chart(fig_bar, use_container_width=True)
 
-        # Table
+        # Master Table
         st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE)")
         formatted_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
         float_cols = score_cols + ['Total Pre-Score', '% LULUS PRE', '% LULUS POST']
@@ -131,13 +142,14 @@ if page_mode == "Main Summary":
             use_container_width=True, hide_index=True
         )
     else:
-        st.info("No data available.")
+        st.info("No data available for the selected date range.")
 
 else:
+    # --- DETAILED SHEET VIEW ---
     selection = st.sidebar.selectbox("Select Detailed Sheet:", list(SHEETS_DICT.keys()))
     st.title(f"📊 {selection}")
     df_view = filtered_data.get(selection, pd.DataFrame())
     if df_view.empty:
-        st.warning("No data found.")
+        st.warning("No data found for the selected range.")
     else:
         st.dataframe(df_view.style.format({"score_num": "{:.1f}"}), use_container_width=True)
