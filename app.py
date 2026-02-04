@@ -11,7 +11,6 @@ SHEETS_DICT = {
     "PENGOPERASIAN MESIN C360": None
 }
 
-# SCALING: Force full width layout
 st.set_page_config(page_title="Depoh Summary Dashboard", layout="wide")
 
 @st.cache_data(ttl=600)
@@ -70,72 +69,57 @@ for name, df in raw_data.items():
     else:
         filtered_data[name] = df
 
-# --- SIDEBAR: NAVIGATION ---
+# --- NAVIGATION ---
 st.sidebar.divider()
-st.sidebar.title("🧭 Navigation")
 page_mode = st.sidebar.radio("Go to:", ["Main Summary", "Detailed Sheet View"])
 
 if page_mode == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    summary_dfs_pre = {}
-    summary_dfs_post = {}
-    
-    for name, df in filtered_data.items():
-        if not df.empty:
-            summary_dfs_pre[name] = df.sort_values('timestamp').groupby('id pekerja').first().reset_index()
-            summary_dfs_post[name] = df.sort_values('timestamp').groupby('id pekerja').last().reset_index()
-        else:
-            summary_dfs_pre[name] = df
-            summary_dfs_post[name] = df
+    # Calculate global attempt counts before grouping
+    combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
+    attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
+    attempt_counts.columns = ['id pekerja', 'attempts']
+    attempt_counts['BIL PERCUBAAN'] = attempt_counts['attempts'].astype(str) + "x"
+
+    # PRE Logic (Earliest attempt)
+    summary_dfs_pre = {name: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() if not df.empty else df for name, df in filtered_data.items()}
+    # POST Logic (Recent Attempt)
+    summary_dfs_post = {name: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() if not df.empty else df for name, df in filtered_data.items()}
 
     valid_dfs = [df for df in summary_dfs_pre.values() if not df.empty]
     if valid_dfs:
         all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in valid_dfs]).drop_duplicates('id pekerja')
-        summary_table = all_staff.copy()
+        summary_table = pd.merge(all_staff, attempt_counts[['id pekerja', 'BIL PERCUBAAN']], on='id pekerja', how='left')
         
         score_cols = list(SHEETS_DICT.keys())
         for name in score_cols:
             pre_score = summary_dfs_pre.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
             summary_table = pd.merge(summary_table, pre_score, on='id pekerja', how='left')
-            
             post_score = summary_dfs_post.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'p_{name}'})
             summary_table = pd.merge(summary_table, post_score, on='id pekerja', how='left')
         
         summary_table = summary_table.fillna(0.0)
-        
-        # Calculations
         summary_table['Total Pre-Sc'] = summary_table[score_cols].sum(axis=1).round(1)
         summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Sc'] / 25.0) * 100).round(1)
-        
         p_cols = [f'p_{name}' for name in score_cols]
         summary_table['Total Post-Sc'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% LULUS POST'] = ((summary_table['Total Post-Sc'] / 25.0) * 100).round(1)
 
-        # Metrics
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Staff", len(summary_table))
-        m2.metric("Avg Pre Score %", f"{summary_table['% LULUS PRE'].mean():.1f}%")
-        m3.metric("Avg Post Score %", f"{summary_table['% LULUS POST'].mean():.1f}%")
-
-        # FIT VIEW TABLE: Show all vital columns at once
         st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE vs POST)")
         formatted_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
         
-        # FIT VIEW: Grouping main columns for easier reading
-        show_columns = ['ID', 'NAMA', 'DEPOH'] + score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']
+        # Adding BIL PERCUBAAN to the column list
+        show_columns = ['ID', 'NAMA', 'DEPOH', 'BIL PERCUBAAN'] + score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']
         
-        # Scaling adjustment using st.dataframe with fit-width
         st.dataframe(
             formatted_df[show_columns].style.format({col: "{:.1f}" for col in score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']}), 
             use_container_width=True, hide_index=True
         )
     else:
         st.info("No data available.")
-
 else:
     selection = st.sidebar.selectbox("Select Detailed Sheet:", list(SHEETS_DICT.keys()))
-    st.title(f"📊 {selection}")
     df_view = filtered_data.get(selection, pd.DataFrame())
     if not df_view.empty:
         st.dataframe(df_view.style.format({"score_num": "{:.1f}"}), use_container_width=True)
