@@ -65,22 +65,22 @@ def load_all_data():
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
     return all_dfs
 
-# --- HIGHLIGHTING LOGIC ---
+# --- HIGHLIGHTING LOGIC (Lighter with 50% Opacity) ---
 def highlight_merit(row):
     score = row['Total Post']
-    # Default transparent
     color = '' 
-    # Logic based on Merit Reference (using lightened hex codes)
+    
+    # Using rgba for 50% opacity (0.5)
     if 0 <= score <= 5:
-        color = 'background-color: #701c1c; color: white;' # Light Red
+        color = 'background-color: rgba(255, 0, 0, 0.5); color: white;'     # Red 50%
     elif 6 <= score <= 10:
-        color = 'background-color: #6e6e1a; color: white;' # Light Yellow/Olive
+        color = 'background-color: rgba(255, 255, 0, 0.3); color: white;'   # Yellow 30% (Yellow at 0.5 is very bright)
     elif 11 <= score <= 15:
-        color = 'background-color: #7a5214; color: white;' # Light Orange
+        color = 'background-color: rgba(255, 165, 0, 0.5); color: white;'   # Orange 50%
     elif 16 <= score <= 20:
-        color = 'background-color: #1a567a; color: white;' # Light Blue
+        color = 'background-color: rgba(0, 191, 255, 0.5); color: white;'   # Blue 50%
     elif 21 <= score <= 25:
-        color = 'background-color: #1a631a; color: white;' # Light Green
+        color = 'background-color: rgba(0, 128, 0, 0.5); color: white;'     # Green 50%
     
     return [color] * len(row)
 
@@ -179,7 +179,7 @@ if page == "Main Summary":
         format_dict = {c: "{:.0f}" for c in short_names} 
         format_dict.update({c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']})
         
-        # Applying highlighting and formatting
+        # Applying styling with rgba colors
         styled_df = final_df[show_cols].style.apply(highlight_merit, axis=1).format(format_dict)
         
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
