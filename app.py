@@ -65,12 +65,11 @@ def load_all_data():
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
     return all_dfs
 
-# --- CORRECTED HIGHLIGHTING LOGIC (Using Score, 50% Opacity) ---
+# --- HIGHLIGHTING LOGIC (Using Score, 50% Opacity) ---
 def highlight_merit(row):
     score = row['Total Post']
     color = '' 
     
-    # Based on raw score 0-25 as per your Merit Reference Table
     if 0 <= score <= 5:
         color = 'background-color: rgba(255, 0, 0, 0.5); color: white;'     # RED
     elif 6 <= score <= 10:
@@ -179,12 +178,10 @@ if page == "Main Summary":
         format_dict = {c: "{:.0f}" for c in short_names} 
         format_dict.update({c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']})
         
-        # Applying styling
         styled_df = final_df[show_cols].style.apply(highlight_merit, axis=1).format(format_dict)
-        
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-        # --- MERIT REFERENCE TABLE ---
+        # --- UPDATED MERIT REFERENCE TABLE (Top to Bottom) ---
         st.markdown("<br>", unsafe_allow_html=True)
         col_merit_1, col_merit_2 = st.columns([1, 2])
         with col_merit_1:
@@ -197,19 +194,9 @@ if page == "Main Summary":
                         <th>Percentage</th>
                     </tr>
                     <tr>
-                        <td style="background-color: #ff0000; color: white; font-weight: bold;">LEMAH</td>
-                        <td>0 - 5</td>
-                        <td>0 - 20%</td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #ffff00; color: black; font-weight: bold;">TIDAK MAHIR</td>
-                        <td>6 - 10</td>
-                        <td>24 - 40%</td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #ffa500; color: black; font-weight: bold;">SEDERHANA MAHIR</td>
-                        <td>11 - 15</td>
-                        <td>44 - 60%</td>
+                        <td style="background-color: #008000; color: white; font-weight: bold;">SANGAT MAHIR</td>
+                        <td>21 - 25</td>
+                        <td>84 - 100%</td>
                     </tr>
                     <tr>
                         <td style="background-color: #00bfff; color: white; font-weight: bold;">MAHIR</td>
@@ -217,9 +204,19 @@ if page == "Main Summary":
                         <td>64 - 80%</td>
                     </tr>
                     <tr>
-                        <td style="background-color: #008000; color: white; font-weight: bold;">SANGAT MAHIR</td>
-                        <td>21 - 25</td>
-                        <td>84 - 100%</td>
+                        <td style="background-color: #ffa500; color: black; font-weight: bold;">SEDERHANA MAHIR</td>
+                        <td>11 - 15</td>
+                        <td>44 - 60%</td>
+                    </tr>
+                    <tr>
+                        <td style="background-color: #ffff00; color: black; font-weight: bold;">TIDAK MAHIR</td>
+                        <td>6 - 10</td>
+                        <td>24 - 40%</td>
+                    </tr>
+                    <tr>
+                        <td style="background-color: #ff0000; color: white; font-weight: bold;">LEMAH</td>
+                        <td>0 - 5</td>
+                        <td>0 - 20%</td>
                     </tr>
                 </table>
             </div>
