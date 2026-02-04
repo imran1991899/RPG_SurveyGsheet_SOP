@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Configuration - Added placeholders to the dictionary
+# 1. Configuration
 SHEETS_DICT = {
     "Operasi Di Laluan": "1SRlxQQ9OFQJyXDFAP2I2bAKEh2ACc9czqdKvysLWP64",
     "Bas Tamat Operasi - RPG": "1P1ThhQJ49Bl9Rh13Aq_rX9eysxDTJFdJL0pX45EGils",
@@ -18,7 +18,6 @@ def load_all_data():
     all_dfs = {}
     for name, sheet_id in SHEETS_DICT.items():
         if sheet_id is None:
-            # Create an empty dataframe for the placeholder modules
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
             continue
             
@@ -28,8 +27,9 @@ def load_all_data():
             temp_df.columns = [str(c).lower().strip() for c in temp_df.columns]
             
             if 'id pekerja' in temp_df.columns and 'total score' in temp_df.columns:
-                temp_df['score_num'] = temp_df['total score'].astype(str).str.split('/').str[0].astype(float)
-                # Keep first attempt for summary
+                # Extract numeric score and round to 1 decimal
+                temp_df['score_num'] = temp_df['total score'].astype(str).str.split('/').str[0].astype(float).round(1)
+                # Take first attempt for "Before" logic
                 all_dfs[name] = temp_df.sort_values('timestamp').groupby('id pekerja').first().reset_index()
         except Exception:
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
@@ -60,24 +60,37 @@ if page_mode == "Main Summary":
             score_subset = df[['id pekerja', 'score_num']].rename(columns={'score_num': sheet_name})
             summary_table = pd.merge(summary_table, score_subset, on='id pekerja', how='left')
         
-        # Fill missing with 0
-        summary_table = summary_table.fillna(0)
+        # Fill missing with 0.0
+        summary_table = summary_table.fillna(0.0)
         
-        # Calculations
+        # Calculations (Single Decimal)
         score_cols = list(SHEETS_DICT.keys())
         max_possible = len(score_cols) * 5
-        summary_table['Total Pre-Score'] = summary_table[score_cols].sum(axis=1)
-        summary_table['% LULUS PRE'] = (summary_table['Total Pre-Score'] / max_possible) * 100
-        summary_table['% LULUS POST'] = 0 # Placeholder
+        summary_table['Total Pre-Score'] = summary_table[score_cols].sum(axis=1).round(1)
+        summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Score'] / max_possible) * 100).round(1)
+        summary_table['% LULUS POST'] = 0.0
 
         st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE)")
+        
+        # Applying single decimal formatting to the dataframe display
+        formatted_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
+        
+        # Columns to format as single decimal
+        float_cols = score_cols + ['Total Pre-Score', '% LULUS PRE', '% LULUS POST']
+        
         st.dataframe(
-            summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
-            .style.format({"% LULUS PRE": "{:.0f}%"}), 
-            use_container_width=True, hide_index=True
+            formatted_df.style.format({col: "{:.1f}" for col in float_cols}), 
+            use_container_width=True, 
+            hide_index=True
         )
+        
+        st.divider()
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Staff", len(summary_table))
+        m2.metric("Avg Score", f"{summary_table['% LULUS PRE'].mean():.1f}%")
+        m3.metric("Depohs", summary_table['depoh'].nunique())
     else:
-        st.info("Please connect your data sources.")
+        st.info("No data available.")
 
 else:
     # --- DETAILED SHEET VIEW ---
@@ -87,20 +100,10 @@ else:
     selected_df = data_map.get(selection, pd.DataFrame())
     
     if selected_df.empty:
-        st.warning(f"No data available for {selection} yet. This module is currently empty.")
-        # Show an empty template so the user sees the expected structure
-        st.dataframe(pd.DataFrame(columns=['ID', 'NAMA', 'DEPOH', 'SCORE']), use_container_width=True)
+        st.warning(f"No data available for {selection}.")
     else:
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            depoh_stats = selected_df.groupby('depoh')['id pekerja'].nunique().reset_index()
-            st.metric("Unique Staff", depoh_stats['id pekerja'].sum())
-            st.dataframe(depoh_stats, hide_index=True)
-        with col2:
-            fig = px.pie(depoh_stats, values='id pekerja', names='depoh', hole=0.7)
-            fig.update_layout(height=300, margin=dict(t=20, b=0, l=0, r=0))
-            st.plotly_chart(fig, use_container_width=True)
-            
-        st.divider()
-        st.subheader("Raw Data Preview")
-        st.dataframe(selected_df, use_container_width=True)
+        # Display with 1 decimal formatting
+        st.dataframe(
+            selected_df.style.format({"score_num": "{:.1f}"}), 
+            use_container_width=True
+        )
