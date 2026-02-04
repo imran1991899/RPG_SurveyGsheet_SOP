@@ -24,7 +24,14 @@ st.set_page_config(page_title="Depoh Summary Dashboard", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #0b111e; color: white; }
-    .depoh-label { font-weight: bold; font-size: 15px; color: #ffffff; margin-top: 10px; }
+    .depoh-label { 
+        font-weight: bold; 
+        font-size: 14px; 
+        color: #ffffff; 
+        margin-top: 10px; 
+        text-align: right; 
+        margin-right: 10px;
+    }
     .stProgress > div > div > div > div { background-color: #f1c40f; }
     .score-text { font-size: 18px; font-weight: bold; color: #f1c40f; line-height: 1; }
     .sub-text { font-size: 11px; color: #bdc3c7; }
@@ -73,14 +80,9 @@ if all_dates:
 else:
     sel_range = None
 
-filtered_data = {}
-for name, df in raw_data.items():
-    if not df.empty and sel_range and len(sel_range) == 2:
-        mask = (df['timestamp'].dt.date >= sel_range[0]) & (df['timestamp'].dt.date <= sel_range[1])
-        filtered_data[name] = df[mask]
-    else:
-        filtered_data[name] = df
+filtered_data = {n: (df[(df['timestamp'].dt.date >= sel_range[0]) & (df['timestamp'].dt.date <= sel_range[1])] if not df.empty and sel_range and len(sel_range)==2 else df) for n, df in raw_data.items()}
 
+# --- NAVIGATION ---
 page = st.sidebar.radio("Go to:", ["Main Summary", "Detailed View"])
 
 if page == "Main Summary":
@@ -117,10 +119,9 @@ if page == "Main Summary":
         summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
 
-        # --- NEW INTERACTIVE SECTION: DEPOH GRAPH SELECTION ---
+        # --- INTERACTIVE GRAPH SECTION ---
         depoh_list = sorted(summary_table['depoh'].unique())
         
-        # Reset button beside graph title
         header_col, reset_col = st.columns([8, 2])
         with header_col:
             st.markdown("<h2 style='color: #f1c40f;'>AVERAGE % SCORE BY DEPOH</h2>", unsafe_allow_html=True)
@@ -132,34 +133,39 @@ if page == "Main Summary":
         if 'selected_depoh' not in st.session_state:
             st.session_state.selected_depoh = "All Depohs"
 
-        # Interactive Dropdown that syncs with graph
         selected_depoh = st.selectbox("Select Depoh to Filter Table:", ["All Depohs"] + depoh_list, key="selected_depoh")
 
         depoh_avgs = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=False)
         
         for _, row in depoh_avgs.iterrows():
-            d_col, b_col, s_col = st.columns([2, 5, 2])
-            # Highlight labels if selected
-            label_style = "color: #f1c40f; border-left: 3px solid #f1c40f; padding-left: 10px;" if row['depoh'] == selected_depoh else "color: #ffffff;"
+            # I changed the column ratio from [2, 5, 2] to [1.2, 5, 2] to move names closer to the bar
+            d_col, b_col, s_col = st.columns([1.2, 5, 2])
+            
+            label_highlight = "border-right: 3px solid #f1c40f; color: #f1c40f;" if row['depoh'] == selected_depoh else "color: #ffffff;"
             
             with d_col:
-                st.markdown(f"<p class='depoh-label' style='{label_style}'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p class='depoh-label' style='{label_highlight}'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
             with b_col:
                 st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
                 st.progress(int(row['% POST']) / 100)
                 st.markdown("</div>", unsafe_allow_html=True)
             with s_col:
-                st.markdown(f"<span class='score-text'>{row['% POST']:.1f}%</span><br><span class='sub-text'>Average Post Score</span>", unsafe_allow_html=True)
+                st.markdown(f"""
+                    <div>
+                        <span class='score-text'>{row['% POST']:.1f}%</span><br>
+                        <span class='sub-text'>Average Post Score</span>
+                    </div>
+                    """, unsafe_allow_html=True)
 
         st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
         # --- FILTERED TABLE VIEW ---
-        st.subheader(f"DATASET: {selected_depoh}")
-        
         display_table = summary_table.copy()
         if selected_depoh != "All Depohs":
             display_table = display_table[display_table['depoh'] == selected_depoh]
 
+        st.subheader(f"SKOR PRA PENILAIAN KENDIRI FC 2025 ({selected_depoh})")
+        
         final_df = display_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH', **SHORT_HEADERS})
         short_names = list(SHORT_HEADERS.values())
         show_cols = ['ID', 'NAMA', 'DEPOH', 'BIL'] + short_names + ['Total Pre', 'Total Post', '% PRE', '% POST']
