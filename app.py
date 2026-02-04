@@ -26,11 +26,11 @@ def load_all_data():
             temp_df = pd.read_csv(url)
             temp_df.columns = [str(c).lower().strip() for c in temp_df.columns]
             
-            # Identify ID and Score columns
             if 'id pekerja' in temp_df.columns and 'total score' in temp_df.columns:
+                # Extract score and round to 1 decimal
                 temp_df['score_num'] = temp_df['total score'].astype(str).str.split('/').str[0].astype(float).round(1)
                 
-                # Ensure timestamp is datetime for filtering
+                # Convert timestamp
                 date_col = 'timestamp' if 'timestamp' in temp_df.columns else 'date'
                 if date_col in temp_df.columns:
                     temp_df['timestamp'] = pd.to_datetime(temp_df[date_col], errors='coerce')
@@ -46,7 +46,6 @@ raw_data = load_all_data()
 # --- SIDEBAR: DATE SELECTION ---
 st.sidebar.title("📅 Filters")
 
-# Collect all dates to find the absolute min and max
 all_dates = []
 for df in raw_data.values():
     if not df.empty and 'timestamp' in df.columns:
@@ -63,7 +62,7 @@ if all_dates:
 else:
     selected_date_range = None
 
-# Apply Filter Logic
+# Apply Filter
 filtered_data = {}
 for name, df in raw_data.items():
     if not df.empty and 'timestamp' in df.columns and selected_date_range and len(selected_date_range) == 2:
@@ -81,7 +80,7 @@ page_mode = st.sidebar.radio("Go to:", ["Main Summary", "Detailed Sheet View"])
 if page_mode == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    # Process "Before" logic (1st attempt) for the Summary Table
+    # Process "Before" logic
     summary_dfs = {}
     for name, df in filtered_data.items():
         if not df.empty:
@@ -89,7 +88,6 @@ if page_mode == "Main Summary":
         else:
             summary_dfs[name] = df
 
-    # Build Master Table
     valid_dfs = [df for df in summary_dfs.values() if not df.empty]
     if valid_dfs:
         all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in valid_dfs]).drop_duplicates('id pekerja')
@@ -102,52 +100,44 @@ if page_mode == "Main Summary":
         
         summary_table = summary_table.fillna(0.0)
         
-        # Calculations
-        score_cols = list(SHEETS_DICT.keys())
-        max_possible = len(score_cols) * 5
+        # --- CALCULATION OVER 25 ---
+        score_cols = list(SHEETS_DICT.keys()) # All 5 columns
+        max_total_score = 25.0 
+        
         summary_table['Total Pre-Score'] = summary_table[score_cols].sum(axis=1).round(1)
-        summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Score'] / max_possible) * 100).round(1)
+        summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Score'] / max_total_score) * 100).round(1)
         summary_table['% LULUS POST'] = 0.0
 
-        # --- TOP METRICS ---
+        # Metrics
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Staff", len(summary_table))
         m2.metric("Avg Score %", f"{summary_table['% LULUS PRE'].mean():.1f}%")
         m3.metric("Depohs Active", summary_table['depoh'].nunique())
         
-        # --- BAR CHART (DEPOH PERFORMANCE) ---
+        # Bar Chart
         st.subheader("📊 Average Performance by Depoh")
         depoh_perf = summary_table.groupby('depoh')['% LULUS PRE'].mean().reset_index()
-        fig_bar = px.bar(depoh_perf, x='depoh', y='% LULUS PRE', 
-                         color='depoh', text_auto='.1f',
-                         labels={'% LULUS PRE': 'Average Lulus %', 'depoh': 'Depoh Name'})
+        fig_bar = px.bar(depoh_perf, x='depoh', y='% LULUS PRE', color='depoh', text_auto='.1f')
         fig_bar.update_layout(height=350, showlegend=False)
         st.plotly_chart(fig_bar, use_container_width=True)
 
-        # --- DATA TABLE ---
+        # Table
         st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE)")
         formatted_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
         float_cols = score_cols + ['Total Pre-Score', '% LULUS PRE', '% LULUS POST']
         
         st.dataframe(
             formatted_df.style.format({col: "{:.1f}" for col in float_cols}), 
-            use_container_width=True, 
-            hide_index=True
+            use_container_width=True, hide_index=True
         )
     else:
-        st.info("No data available for the selected date range.")
+        st.info("No data available.")
 
 else:
-    # --- DETAILED SHEET VIEW ---
     selection = st.sidebar.selectbox("Select Detailed Sheet:", list(SHEETS_DICT.keys()))
-    st.title(f"📊 Detailed Analysis: {selection}")
-    
-    selected_df = filtered_data.get(selection, pd.DataFrame())
-    
-    if selected_df.empty:
-        st.warning(f"No data available for {selection} within the selected dates.")
+    st.title(f"📊 {selection}")
+    df_view = filtered_data.get(selection, pd.DataFrame())
+    if df_view.empty:
+        st.warning("No data found.")
     else:
-        st.dataframe(
-            selected_df.style.format({"score_num": "{:.1f}"}), 
-            use_container_width=True
-        )
+        st.dataframe(df_view.style.format({"score_num": "{:.1f}"}), use_container_width=True)
