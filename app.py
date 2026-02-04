@@ -30,7 +30,7 @@ st.markdown("""
         color: #ffffff; 
         margin-top: 10px; 
         text-align: right; 
-        margin-right: 10px;
+        margin-right: -15px; /* Pulls text closer to the bar */
     }
     .stProgress > div > div > div > div { background-color: #f1c40f; }
     .score-text { font-size: 18px; font-weight: bold; color: #f1c40f; line-height: 1; }
@@ -138,8 +138,8 @@ if page == "Main Summary":
         depoh_avgs = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=False)
         
         for _, row in depoh_avgs.iterrows():
-            # I changed the column ratio from [2, 5, 2] to [1.2, 5, 2] to move names closer to the bar
-            d_col, b_col, s_col = st.columns([1.2, 5, 2])
+            # Ratio narrowed to 1.1 to bring elements closer
+            d_col, b_col, s_col = st.columns([1.1, 5, 2])
             
             label_highlight = "border-right: 3px solid #f1c40f; color: #f1c40f;" if row['depoh'] == selected_depoh else "color: #ffffff;"
             
