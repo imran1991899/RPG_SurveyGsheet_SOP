@@ -33,13 +33,33 @@ st.markdown("""
     .sub-text { font-size: 11px; color: #bdc3c7; }
     .stDataFrame { border: 1px solid #34495e; }
     
-    /* Merit Table Styling */
-    .merit-box {
-        padding: 10px; border-radius: 5px; border: 1px solid #34495e;
-        background-color: #161b22; width: 100%;
+    /* Light Merit Table Styling */
+    .merit-container {
+        margin-top: 20px;
+        width: 450px;
     }
-    .merit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .merit-table th, .merit-table td { padding: 5px; text-align: center; border: 1px solid #30363d; }
+    .merit-table {
+        width: 100%;
+        border-collapse: collapse;
+        background-color: white;
+        color: black;
+        font-family: Arial, sans-serif;
+        border: 1px solid #000;
+    }
+    .merit-table th {
+        background-color: #d9d9d9;
+        font-weight: bold;
+        border: 1px solid #000;
+        padding: 4px 10px;
+        text-align: center;
+    }
+    .merit-table td {
+        border: 1px solid #000;
+        padding: 4px 10px;
+        text-align: center;
+        font-weight: 500;
+    }
+    .merit-label { font-weight: bold; text-align: left !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -86,7 +106,7 @@ else:
 
 filtered_data = {n: (df[(df['timestamp'].dt.date >= sel_range[0]) & (df['timestamp'].dt.date <= sel_range[1])] if not df.empty and sel_range and len(sel_range)==2 else df) for n, df in raw_data.items()}
 
-# --- MAIN PAGE ---
+# --- NAVIGATION ---
 page = st.sidebar.radio("Go to:", ["Main Summary", "Detailed View"])
 
 if page == "Main Summary":
@@ -95,7 +115,7 @@ if page == "Main Summary":
     valid_dfs_check = [df for df in filtered_data.values() if not df.empty]
     
     if not valid_dfs_check:
-        st.warning("⚠️ No data found for selected dates.")
+        st.warning("⚠️ No data found.")
     else:
         # Processing
         combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
@@ -128,12 +148,12 @@ if page == "Main Summary":
         header_col, reset_col = st.columns([8, 2])
         with header_col: st.markdown("<h2 style='color: #f1c40f;'>AVERAGE % SCORE BY DEPOH</h2>", unsafe_allow_html=True)
         with reset_col:
-            if st.button("🔄 Reset Graph"):
+            if st.button("🔄 Reset Graph Selection"):
                 st.session_state.selected_depoh = "All Depohs"
                 st.rerun()
 
         if 'selected_depoh' not in st.session_state: st.session_state.selected_depoh = "All Depohs"
-        selected_depoh = st.selectbox("Select Depoh:", ["All Depohs"] + depoh_list, key="selected_depoh")
+        selected_depoh = st.selectbox("Select Depoh to Filter Table:", ["All Depohs"] + depoh_list, key="selected_depoh")
 
         depoh_avgs = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=False)
         for _, row in depoh_avgs.iterrows():
@@ -144,7 +164,7 @@ if page == "Main Summary":
                 st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
                 st.progress(int(row['% POST']) / 100)
                 st.markdown("</div>", unsafe_allow_html=True)
-            with s_col: st.markdown(f"<div><span class='score-text'>{row['% POST']:.1f}%</span><br><span class='sub-text'>Avg Post Score</span></div>", unsafe_allow_html=True)
+            with s_col: st.markdown(f"<div><span class='score-text'>{row['% POST']:.1f}%</span><br><span class='sub-text'>Average Post Score</span></div>", unsafe_allow_html=True)
 
         st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
@@ -163,46 +183,47 @@ if page == "Main Summary":
         
         st.dataframe(final_df[show_cols].style.format(format_dict), use_container_width=True, hide_index=True)
 
-        # --- NEW MERIT REFERENCE TABLE ---
-        st.markdown("<br>", unsafe_allow_html=True)
-        col_merit_1, col_merit_2 = st.columns([1, 2]) # Keeps it small on the left
-        with col_merit_1:
-            st.markdown("""
-            <div class="merit-box">
-                <table class="merit-table">
-                    <tr style="background-color: #30363d;">
+        # --- LIGHT MERIT REFERENCE TABLE ---
+        st.markdown("""
+        <div class="merit-container">
+            <table class="merit-table">
+                <thead>
+                    <tr>
                         <th>Merit</th>
                         <th>Score</th>
-                        <th>Percentage</th>
+                        <th>Peratus</th>
                     </tr>
+                </thead>
+                <tbody>
                     <tr>
-                        <td style="background-color: #ff0000; color: white; font-weight: bold;">LEMAH</td>
+                        <td class="merit-label" style="background-color: #ff0000; color: black;">LEMAH</td>
                         <td>0 - 5</td>
                         <td>0 - 20%</td>
                     </tr>
                     <tr>
-                        <td style="background-color: #ffff00; color: black; font-weight: bold;">TIDAK MAHIR</td>
+                        <td class="merit-label" style="background-color: #ffff00; color: black;">TIDAK MAHIR</td>
                         <td>6 - 10</td>
                         <td>24 - 40%</td>
                     </tr>
                     <tr>
-                        <td style="background-color: #ffa500; color: black; font-weight: bold;">SEDERHANA MAHIR</td>
+                        <td class="merit-label" style="background-color: #ffc000; color: black;">SEDERHANA MAHIR</td>
                         <td>11 - 15</td>
                         <td>44 - 60%</td>
                     </tr>
                     <tr>
-                        <td style="background-color: #00bfff; color: white; font-weight: bold;">MAHIR</td>
+                        <td class="merit-label" style="background-color: #00b0f0; color: black;">MAHIR</td>
                         <td>16 - 20</td>
                         <td>64 - 80%</td>
                     </tr>
                     <tr>
-                        <td style="background-color: #008000; color: white; font-weight: bold;">SANGAT MAHIR</td>
+                        <td class="merit-label" style="background-color: #00b050; color: black;">SANGAT MAHIR</td>
                         <td>21 - 25</td>
                         <td>84 - 100%</td>
                     </tr>
-                </table>
-            </div>
-            """, unsafe_allow_html=True)
+                </tbody>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
 
 else:
     selection = st.sidebar.selectbox("Select Detailed Sheet:", list(SHEETS_DICT.keys()))
