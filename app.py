@@ -199,7 +199,7 @@ if page == "Main Summary":
         display_table = summary_table.copy()
         if selected_depoh != "All Depohs": display_table = display_table[display_table['depoh'] == selected_depoh]
 
-        st.subheader(f"SKOR PRA PENILAIAN KENDIRI FC 2025 ({selected_depoh})")
+        st.subheader(f"SKOR PRA PENILAIAN KENDIRI BC 2025 ({selected_depoh})")
         
         final_df = display_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH', **SHORT_HEADERS})
         short_names = list(SHORT_HEADERS.values())
