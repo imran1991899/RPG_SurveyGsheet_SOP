@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from datetime import date
 
 # 1. Configuration
 SHEETS_DICT = {
@@ -32,7 +33,6 @@ st.markdown("""
     .sub-text { font-size: 11px; color: #bdc3c7; }
     .stDataFrame { border: 1px solid #34495e; }
     
-    /* Overlapping Bar CSS */
     .bar-container {
         width: 100%; background-color: #262730; height: 12px;
         border-radius: 6px; position: relative; margin-top: 20px;
@@ -49,7 +49,6 @@ st.markdown("""
         color: #2ecc71; font-weight: bold; font-size: 14px; margin-left: 8px;
     }
 
-    /* Merit Table Styling */
     .merit-box {
         padding: 10px; border-radius: 5px; border: 1px solid #34495e;
         background-color: #161b22; width: 100%;
@@ -84,21 +83,16 @@ def load_all_data():
 def highlight_merit(row):
     score = row['Total Post']
     color = '' 
-    if 0 <= score <= 5:
-        color = 'background-color: rgba(255, 0, 0, 0.5); color: white;'
-    elif 6 <= score <= 10:
-        color = 'background-color: rgba(255, 255, 0, 0.5); color: black;'
-    elif 11 <= score <= 15:
-        color = 'background-color: rgba(255, 165, 0, 0.5); color: white;'
-    elif 16 <= score <= 20:
-        color = 'background-color: rgba(0, 191, 255, 0.5); color: white;'
-    elif 21 <= score <= 25:
-        color = 'background-color: rgba(0, 128, 0, 0.5); color: white;'
+    if 0 <= score <= 5: color = 'background-color: rgba(255, 0, 0, 0.5); color: white;'
+    elif 6 <= score <= 10: color = 'background-color: rgba(255, 255, 0, 0.5); color: black;'
+    elif 11 <= score <= 15: color = 'background-color: rgba(255, 165, 0, 0.5); color: white;'
+    elif 16 <= score <= 20: color = 'background-color: rgba(0, 191, 255, 0.5); color: white;'
+    elif 21 <= score <= 25: color = 'background-color: rgba(0, 128, 0, 0.5); color: white;'
     return [color] * len(row)
 
 raw_data = load_all_data()
 
-# --- FILTERS ---
+# --- FIXED FILTERS LOGIC ---
 st.sidebar.title("📅 Filters")
 all_dates = []
 for df in raw_data.values():
@@ -106,11 +100,26 @@ for df in raw_data.values():
 
 if all_dates:
     min_d, max_d = min(all_dates), max(all_dates)
+    
+    # Validation: Ensure session state is within current data bounds
+    if 'date_range' not in st.session_state or not isinstance(st.session_state.date_range, (list, tuple)) or len(st.session_state.date_range) < 2:
+        st.session_state.date_range = (min_d, max_d)
+    else:
+        # Clamp existing values to new min/max to prevent the StreamlitAPIException
+        start_date = max(min_d, min(max_d, st.session_state.date_range[0]))
+        end_date = max(min_d, min(max_d, st.session_state.date_range[1]))
+        st.session_state.date_range = (start_date, end_date)
+
     if st.sidebar.button("🔄 Reset Dates"):
         st.session_state.date_range = (min_d, max_d)
         st.rerun()
-    if 'date_range' not in st.session_state: st.session_state.date_range = (min_d, max_d)
-    sel_range = st.sidebar.date_input("Select Date Range:", value=st.session_state.date_range, min_value=min_d, max_value=max_d)
+
+    sel_range = st.sidebar.date_input(
+        "Select Date Range:", 
+        value=st.session_state.date_range, 
+        min_value=min_d, 
+        max_value=max_d
+    )
     st.session_state.date_range = sel_range
 else:
     sel_range = None
@@ -153,7 +162,6 @@ if page == "Main Summary":
         summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
 
-        # --- NARROW SECTION: OVERLAPPING PROGRESS BARS ---
         graph_col, spacer_col = st.columns([7, 3])
         
         with graph_col:
@@ -168,14 +176,11 @@ if page == "Main Summary":
             for _, row in depoh_stats.iterrows():
                 d_col, b_col, s_col = st.columns([1.5, 5, 2.5])
                 highlight = "border-right: 3px solid #f1c40f; color: #f1c40f;" if row['depoh'] == selected_depoh else "color: #ffffff;"
-                
-                # Calculation for increase
                 increase = row['% POST'] - row['% PRE']
                 inc_text = f"<span class='increase-label'>+{increase:.1f}%</span>" if increase > 0 else ""
 
                 with d_col: st.markdown(f"<p class='depoh-label' style='{highlight}'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
                 with b_col: 
-                    # Custom Overlapping HTML
                     st.markdown(f"""
                         <div class="bar-container">
                             <div class="bar-post" style="width: {row['% POST']}%;"></div>
@@ -183,12 +188,7 @@ if page == "Main Summary":
                         </div>
                     """, unsafe_allow_html=True)
                 with s_col: 
-                    st.markdown(f"""
-                        <div>
-                            <span class='score-text'>{row['% POST']:.1f}%</span>{inc_text}<br>
-                            <span class='sub-text'>Avg Post Score</span>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div><span class='score-text'>{row['% POST']:.1f}%</span>{inc_text}<br><span class='sub-text'>Avg Post Score</span></div>", unsafe_allow_html=True)
 
         with spacer_col:
             st.subheader("📌 Key Metrics")
@@ -196,7 +196,6 @@ if page == "Main Summary":
 
         st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
-        # --- FULL WIDTH SECTION: DATA TABLE ---
         display_table = summary_table.copy()
         if selected_depoh != "All Depohs": display_table = display_table[display_table['depoh'] == selected_depoh]
 
@@ -212,15 +211,12 @@ if page == "Main Summary":
         styled_df = final_df[show_cols].style.apply(highlight_merit, axis=1).format(format_dict)
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-        # --- MERIT REFERENCE TABLE ---
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("""
         <div class="merit-box" style="max-width: 400px;">
             <table class="merit-table">
                 <tr style="background-color: #30363d;">
-                    <th>Merit</th>
-                    <th>Score</th>
-                    <th>Percentage</th>
+                    <th>Merit</th><th>Score</th><th>Percentage</th>
                 </tr>
                 <tr><td style="background-color: #008000; color: white; font-weight: bold;">SANGAT MAHIR</td><td>21 - 25</td><td>84 - 100%</td></tr>
                 <tr><td style="background-color: #00bfff; color: white; font-weight: bold;">MAHIR</td><td>16 - 20</td><td>64 - 80%</td></tr>
