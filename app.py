@@ -52,7 +52,6 @@ for df in raw_data.values():
 if all_dates:
     min_date, max_date = min(all_dates), max(all_dates)
     
-    # Reset Button
     if st.sidebar.button("🔄 Reset Dates"):
         st.session_state.date_range = (min_date, max_date)
         st.rerun()
@@ -70,7 +69,6 @@ if all_dates:
 else:
     selected_date_range = None
 
-# Apply Filter
 filtered_data = {}
 for name, df in raw_data.items():
     if not df.empty and 'timestamp' in df.columns and selected_date_range and len(selected_date_range) == 2:
@@ -88,14 +86,14 @@ page_mode = st.sidebar.radio("Go to:", ["Main Summary", "Detailed Sheet View"])
 if page_mode == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    # PRE Logic (First Attempt)
     summary_dfs_pre = {}
-    # POST Logic (Recent Attempt)
     summary_dfs_post = {}
     
     for name, df in filtered_data.items():
         if not df.empty:
+            # PRE: Earliest entry
             summary_dfs_pre[name] = df.sort_values('timestamp').groupby('id pekerja').first().reset_index()
+            # POST: Most recent entry
             summary_dfs_post[name] = df.sort_values('timestamp').groupby('id pekerja').last().reset_index()
         else:
             summary_dfs_pre[name] = df
@@ -106,23 +104,22 @@ if page_mode == "Main Summary":
         all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in valid_dfs]).drop_duplicates('id pekerja')
         summary_table = all_staff.copy()
         
-        # Merge scores
         score_cols = list(SHEETS_DICT.keys())
         for name in score_cols:
-            # PRE columns
             pre_score = summary_dfs_pre.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
             summary_table = pd.merge(summary_table, pre_score, on='id pekerja', how='left')
-            # POST calculation (hidden)
+            
             post_score = summary_dfs_post.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'p_{name}'})
             summary_table = pd.merge(summary_table, post_score, on='id pekerja', how='left')
         
         summary_table = summary_table.fillna(0.0)
         
-        # Calculations (All over 25.0)
+        # Calculations
         summary_table['Total Pre-Sc'] = summary_table[score_cols].sum(axis=1).round(1)
         summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Sc'] / 25.0) * 100).round(1)
         
         p_cols = [f'p_{name}' for name in score_cols]
+        # ADDED: Total Post-Sc column calculation
         summary_table['Total Post-Sc'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% LULUS POST'] = ((summary_table['Total Post-Sc'] / 25.0) * 100).round(1)
 
@@ -132,22 +129,21 @@ if page_mode == "Main Summary":
         m2.metric("Avg Pre Score %", f"{summary_table['% LULUS PRE'].mean():.1f}%")
         m3.metric("Avg Post Score %", f"{summary_table['% LULUS POST'].mean():.1f}%")
 
-        # Table
+        # Table Display
         st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE vs POST)")
         formatted_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
         
-        # We only show the PRE modules, then total scores and percentages
-        show_columns = ['ID', 'NAMA', 'DEPOH'] + score_cols + ['Total Pre-Sc', '% LULUS PRE', '% LULUS POST']
+        # Updated columns to include Total Post-Sc
+        show_columns = ['ID', 'NAMA', 'DEPOH'] + score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']
         
         st.dataframe(
-            formatted_df[show_columns].style.format({col: "{:.1f}" for col in score_cols + ['Total Pre-Sc', '% LULUS PRE', '% LULUS POST']}), 
+            formatted_df[show_columns].style.format({col: "{:.1f}" for col in score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']}), 
             use_container_width=True, hide_index=True
         )
     else:
         st.info("No data available.")
 
 else:
-    # --- DETAILED SHEET VIEW ---
     selection = st.sidebar.selectbox("Select Detailed Sheet:", list(SHEETS_DICT.keys()))
     st.title(f"📊 {selection}")
     df_view = filtered_data.get(selection, pd.DataFrame())
