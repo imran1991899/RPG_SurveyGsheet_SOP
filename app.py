@@ -33,33 +33,39 @@ st.markdown("""
     .sub-text { font-size: 11px; color: #bdc3c7; }
     .stDataFrame { border: 1px solid #34495e; }
     
-    /* Light Merit Table Styling */
-    .merit-container {
-        margin-top: 20px;
-        width: 450px;
+    /* EXACT DESIGN MERIT TABLE */
+    .merit-wrapper {
+        margin-top: 30px;
+        display: flex;
+        justify-content: flex-start;
     }
-    .merit-table {
-        width: 100%;
+    .merit-table-exact {
         border-collapse: collapse;
         background-color: white;
         color: black;
         font-family: Arial, sans-serif;
-        border: 1px solid #000;
+        width: 500px;
+        border: 2px solid black;
     }
-    .merit-table th {
+    .merit-table-exact th {
         background-color: #d9d9d9;
+        border: 1px solid black;
+        padding: 8px;
+        text-align: center;
         font-weight: bold;
-        border: 1px solid #000;
-        padding: 4px 10px;
+        font-size: 16px;
+    }
+    .merit-table-exact td {
+        border: 1px solid black;
+        padding: 6px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    .label-cell {
+        width: 40%;
         text-align: center;
     }
-    .merit-table td {
-        border: 1px solid #000;
-        padding: 4px 10px;
-        text-align: center;
-        font-weight: 500;
-    }
-    .merit-label { font-weight: bold; text-align: left !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -183,40 +189,40 @@ if page == "Main Summary":
         
         st.dataframe(final_df[show_cols].style.format(format_dict), use_container_width=True, hide_index=True)
 
-        # --- LIGHT MERIT REFERENCE TABLE ---
+        # --- EXACT DESIGN MERIT REFERENCE TABLE ---
         st.markdown("""
-        <div class="merit-container">
-            <table class="merit-table">
+        <div class="merit-wrapper">
+            <table class="merit-table-exact">
                 <thead>
                     <tr>
-                        <th>Merit</th>
-                        <th>Score</th>
-                        <th>Peratus</th>
+                        <th style="width: 33%;">Merit</th>
+                        <th style="width: 33%;">Score</th>
+                        <th style="width: 33%;">Peratus</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="merit-label" style="background-color: #ff0000; color: black;">LEMAH</td>
+                        <td style="background-color: #ff0000;">LEMAH</td>
                         <td>0 - 5</td>
                         <td>0 - 20%</td>
                     </tr>
                     <tr>
-                        <td class="merit-label" style="background-color: #ffff00; color: black;">TIDAK MAHIR</td>
+                        <td style="background-color: #ffff00;">TIDAK MAHIR</td>
                         <td>6 - 10</td>
-                        <td>24 - 40%</td>
+                        <td>24 - 40 %</td>
                     </tr>
                     <tr>
-                        <td class="merit-label" style="background-color: #ffc000; color: black;">SEDERHANA MAHIR</td>
+                        <td style="background-color: #ffc000;">SEDERHANA MAHIR</td>
                         <td>11 - 15</td>
-                        <td>44 - 60%</td>
+                        <td>44 - 60 %</td>
                     </tr>
                     <tr>
-                        <td class="merit-label" style="background-color: #00b0f0; color: black;">MAHIR</td>
+                        <td style="background-color: #00b0f0;">MAHIR</td>
                         <td>16 - 20</td>
-                        <td>64 - 80%</td>
+                        <td>64 - 80 %</td>
                     </tr>
                     <tr>
-                        <td class="merit-label" style="background-color: #00b050; color: black;">SANGAT MAHIR</td>
+                        <td style="background-color: #00b050;">SANGAT MAHIR</td>
                         <td>21 - 25</td>
                         <td>84 - 100%</td>
                     </tr>
