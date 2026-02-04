@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
 # 1. Configuration
 SHEETS_DICT = {
@@ -11,7 +10,7 @@ SHEETS_DICT = {
     "PENGOPERASIAN MESIN C360": None
 }
 
-# Mapping for short headers to ensure "Fit View" without scrolling
+# Short headers for the table to prevent horizontal scrolling
 SHORT_HEADERS = {
     "Operasi Di Laluan": "M1:Laluan",
     "Bas Tamat Operasi - RPG": "M2:RPG",
@@ -21,6 +20,19 @@ SHORT_HEADERS = {
 }
 
 st.set_page_config(page_title="Depoh Summary Dashboard", layout="wide")
+
+# --- CUSTOM CSS FOR THE YELLOW PROGRESS BAR DESIGN ---
+st.markdown("""
+    <style>
+    .main { background-color: #0b111e; color: white; }
+    .depoh-label { font-weight: bold; font-size: 15px; color: #ffffff; margin-top: 10px; }
+    .stProgress > div > div > div > div { background-color: #f1c40f; }
+    .score-text { font-size: 18px; font-weight: bold; color: #f1c40f; line-height: 1; }
+    .sub-text { font-size: 11px; color: #bdc3c7; }
+    /* Table Styling */
+    .stDataFrame { border: 1px solid #34495e; }
+    </style>
+    """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=600)
 def load_all_data():
@@ -50,22 +62,20 @@ raw_data = load_all_data()
 st.sidebar.title("📅 Filters")
 all_dates = []
 for df in raw_data.values():
-    if not df.empty:
-        all_dates.extend(df['timestamp'].dt.date.tolist())
+    if not df.empty: all_dates.extend(df['timestamp'].dt.date.tolist())
 
 if all_dates:
     min_d, max_d = min(all_dates), max(all_dates)
     if st.sidebar.button("🔄 Reset Dates"):
         st.session_state.date_range = (min_d, max_d)
         st.rerun()
-    if 'date_range' not in st.session_state:
-        st.session_state.date_range = (min_d, max_d)
+    if 'date_range' not in st.session_state: st.session_state.date_range = (min_d, max_d)
     sel_range = st.sidebar.date_input("Select Date Range:", value=st.session_state.date_range, min_value=min_d, max_value=max_d)
     st.session_state.date_range = sel_range
 else:
     sel_range = None
 
-# Apply Data Filtering
+# Filter Logic
 filtered_data = {}
 for name, df in raw_data.items():
     if not df.empty and sel_range and len(sel_range) == 2:
@@ -74,43 +84,44 @@ for name, df in raw_data.items():
     else:
         filtered_data[name] = df
 
-# --- NAVIGATION ---
-st.sidebar.divider()
+# --- PAGE MODE ---
 page = st.sidebar.radio("Go to:", ["Main Summary", "Detailed View"])
 
 if page == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    # Safety Check for Empty Data
-    valid_dfs_raw = [df[['id pekerja']] for df in filtered_data.values() if not df.empty]
+    # Check for empty filtered data to avoid concatenation errors
+    valid_dfs_check = [df for df in filtered_data.values() if not df.empty]
     
-    if not valid_dfs_raw:
-        st.warning("⚠️ No data found for the selected date range. Please adjust the filters.")
+    if not valid_dfs_check:
+        st.warning("⚠️ No data found for the selected date range.")
     else:
-        # Calculate Attempt Counts (BIL)
-        combined_raw = pd.concat(valid_dfs_raw)
+        # 1. Calculate BIL PERCUBAAN
+        combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
         attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
         attempt_counts.columns = ['id pekerja', 'attempts']
         attempt_counts['BIL'] = attempt_counts['attempts'].astype(str) + "x"
 
-        # Logic: PRE (First entry) and POST (Most recent entry)
+        # 2. Logic for PRE (Earliest) and POST (Latest)
         summary_dfs_pre = {n: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() for n, df in filtered_data.items() if not df.empty}
         summary_dfs_post = {n: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() for n, df in filtered_data.items() if not df.empty}
 
-        # Build Master Table
+        # 3. Create Master Summary Table
         all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in summary_dfs_pre.values()]).drop_duplicates('id pekerja')
         summary_table = pd.merge(all_staff, attempt_counts[['id pekerja', 'BIL']], on='id pekerja', how='left')
         
         score_cols = list(SHEETS_DICT.keys())
         for name in score_cols:
+            # Add Pre-scores
             pre = summary_dfs_pre.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
             summary_table = pd.merge(summary_table, pre, on='id pekerja', how='left')
+            # Add Post-scores (prefixed with p_)
             post = summary_dfs_post.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'p_{name}'})
             summary_table = pd.merge(summary_table, post, on='id pekerja', how='left')
         
         summary_table = summary_table.fillna(0.0)
         
-        # Calculations (All over 25.0)
+        # 4. Totals and Percentages
         summary_table['Total Pre'] = summary_table[score_cols].sum(axis=1).round(1)
         summary_table['% PRE'] = ((summary_table['Total Pre'] / 25.0) * 100).round(1)
         
@@ -118,26 +129,40 @@ if page == "Main Summary":
         summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
 
-        # --- DIAGRAM: PERFORMANCE BY DEPOH ---
-        st.subheader("📊 Average % Score by Depoh")
-        depoh_stats = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=True)
+        # --- DIAGRAM: THE YELLOW PROGRESS BAR DESIGN ---
+        st.markdown("<h2 style='text-align: center; color: #f1c40f; margin-bottom: 30px;'>AVERAGE % SCORE BY DEPOH</h2>", unsafe_allow_html=True)
         
-        fig = px.bar(
-            depoh_stats, x='% POST', y='depoh', orientation='h',
-            text='% POST', color='% POST', color_continuous_scale='Sunset'
-        )
-        fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        fig.update_layout(xaxis_title="Average % Score", yaxis_title=None, xaxis=dict(range=[0, 105]), height=400, showlegend=False, coloraxis_showscale=False)
-        st.plotly_chart(fig, use_container_width=True)
+        depoh_avgs = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=False)
+        
+        for _, row in depoh_avgs.iterrows():
+            # Creating the row layout: Name | Progress Bar | Score
+            d_col, b_col, s_col = st.columns([2, 5, 2])
+            with d_col:
+                st.markdown(f"<p class='depoh-label'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
+            with b_col:
+                st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
+                st.progress(int(row['% POST']) / 100)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with s_col:
+                st.markdown(f"""
+                    <div>
+                        <span class='score-text'>{row['% POST']:.1f}%</span><br>
+                        <span class='sub-text'>Average Post Score</span>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-        # --- TABLE: FIT VIEW ---
+        st.markdown("<br><hr><br>", unsafe_allow_html=True)
+
+        # --- TABLE: FULL FIT VIEW ---
         st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE vs POST)")
+        
+        # Prepare for display
         final_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH', **SHORT_HEADERS})
         short_names = list(SHORT_HEADERS.values())
         show_cols = ['ID', 'NAMA', 'DEPOH', 'BIL'] + short_names + ['Total Pre', 'Total Post', '% PRE', '% POST']
         
         st.dataframe(
-            final_df[show_cols].style.format({c: "{:.0f}" for c in short_names} | {c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']}),
+            final_df[show_cols].style.format({c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']}),
             use_container_width=True, hide_index=True
         )
 
