@@ -29,7 +29,7 @@ def load_single_sheet(sheet_id):
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
         df = df.dropna(subset=[date_col])
     
-    # Extract numeric score from string (e.g., "4.00 / 5" -> 4.0)
+    # Extract numeric score from string
     if 'total score' in df.columns:
         df['score_val'] = df['total score'].astype(str).str.split('/').str[0].astype(float)
     
@@ -64,39 +64,9 @@ try:
             mask = (df[date_col_name].dt.date >= start_date) & (df[date_col_name].dt.date <= end_date)
             df = df[mask]
 
-    # --- BEFORE vs AFTER TABLE LOGIC ---
-    if 'id pekerja' in df.columns and 'score_val' in df.columns:
-        st.subheader("📝 SOP Understanding: Before vs After")
-        
-        # Sort by timestamp to find 1st attempt
-        df_sorted = df.sort_values(by=date_col_name)
-        
-        comparison_list = []
-        for staff_id, group in df_sorted.groupby('id pekerja'):
-            # First submission is always 'Before'
-            before_score = group.iloc[0]['score_val']
-            staff_name = group.iloc[0]['nama penuh'] if 'nama penuh' in group.columns else "N/A"
-            depoh_name = group.iloc[0]['depoh'] if 'depoh' in group.columns else "N/A"
-            
-            # If they have multiple answers, get the highest score from the subsequent ones
-            after_score = None
-            if len(group) > 1:
-                after_score = group.iloc[1:]['score_val'].max()
-            
-            comparison_list.append({
-                "Staff ID": staff_id,
-                "Name": staff_name,
-                "Depoh": depoh_name,
-                "Before (1st Attempt)": before_score,
-                "After (Highest of Recent)": after_score
-            })
-        
-        comp_df = pd.DataFrame(comparison_list)
-        st.dataframe(comp_df, hide_index=True, use_container_width=True)
-        st.divider()
-
     # --- DASHBOARD LOGIC ---
     if 'id pekerja' in df.columns and 'depoh' in df.columns:
+        # Grouping and counting unique IDs
         depoh_stats = df.groupby('depoh')['id pekerja'].nunique().reset_index()
         depoh_stats.columns = ['Depoh Name', 'Unique Staff Count']
 
@@ -117,8 +87,26 @@ try:
             st.plotly_chart(fig, use_container_width=True)
             
         st.divider()
+        
+        # --- DATA PREVIEW WITH BEFORE/AFTER LOGIC ---
         st.subheader("Filtered Data Preview")
-        st.dataframe(df, use_container_width=True)
+        
+        if 'score_val' in df.columns:
+            # Sort by timestamp to identify chronological order
+            df = df.sort_values(by=date_col_name)
+            
+            # Identify "Before" (First occurrence of ID)
+            df['is_before'] = ~df.duplicated(subset=['id pekerja'], keep='first')
+            
+            # Map the Status
+            df['survey_phase'] = df['is_before'].map({True: 'Before', False: 'After'})
+            
+            # Clean up display columns
+            display_df = df.drop(columns=['is_before'])
+            st.dataframe(display_df, use_container_width=True)
+        else:
+            st.dataframe(df, use_container_width=True)
+            
     else:
         st.error(f"Columns not found! Ensure 'id pekerja' and 'depoh' are in the sheet.")
 
