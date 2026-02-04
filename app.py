@@ -65,6 +65,25 @@ def load_all_data():
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
     return all_dfs
 
+# --- HIGHLIGHTING LOGIC ---
+def highlight_merit(row):
+    score = row['Total Post']
+    # Default transparent
+    color = '' 
+    # Logic based on Merit Reference (using lightened hex codes)
+    if 0 <= score <= 5:
+        color = 'background-color: #701c1c; color: white;' # Light Red
+    elif 6 <= score <= 10:
+        color = 'background-color: #6e6e1a; color: white;' # Light Yellow/Olive
+    elif 11 <= score <= 15:
+        color = 'background-color: #7a5214; color: white;' # Light Orange
+    elif 16 <= score <= 20:
+        color = 'background-color: #1a567a; color: white;' # Light Blue
+    elif 21 <= score <= 25:
+        color = 'background-color: #1a631a; color: white;' # Light Green
+    
+    return [color] * len(row)
+
 raw_data = load_all_data()
 
 # --- FILTERS ---
@@ -97,7 +116,6 @@ if page == "Main Summary":
     if not valid_dfs_check:
         st.warning("⚠️ No data found for selected dates.")
     else:
-        # Processing
         combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
         attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
         attempt_counts.columns = ['id pekerja', 'attempts']
@@ -161,11 +179,14 @@ if page == "Main Summary":
         format_dict = {c: "{:.0f}" for c in short_names} 
         format_dict.update({c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']})
         
-        st.dataframe(final_df[show_cols].style.format(format_dict), use_container_width=True, hide_index=True)
+        # Applying highlighting and formatting
+        styled_df = final_df[show_cols].style.apply(highlight_merit, axis=1).format(format_dict)
+        
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
         # --- NEW MERIT REFERENCE TABLE ---
         st.markdown("<br>", unsafe_allow_html=True)
-        col_merit_1, col_merit_2 = st.columns([1, 2]) # Keeps it small on the left
+        col_merit_1, col_merit_2 = st.columns([1, 2])
         with col_merit_1:
             st.markdown("""
             <div class="merit-box">
