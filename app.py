@@ -27,9 +27,8 @@ def load_single_sheet(sheet_id):
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
         df = df.dropna(subset=[date_col])
     
-    # Pre-process numeric score for calculation
+    # Extract numeric score (e.g., "5.00 / 5" -> 5.0)
     if 'total score' in df.columns:
-        # Extract numeric part (e.g., "5.00 / 5" -> 5.0)
         df['score_numeric'] = df['total score'].astype(str).str.split('/').str[0].astype(float)
     
     return df, date_col
@@ -61,47 +60,50 @@ try:
             df = df[mask]
 
     # --- BEFORE VS AFTER LOGIC ---
-    if 'id pekerja' in df.columns and 'depoh' in df.columns and 'score_numeric' in df.columns:
+    if 'id pekerja' in df.columns and 'score_numeric' in df.columns:
         
-        # Sort by timestamp to identify first vs later attempts
-        df_sorted = df.sort_values(by=[date_col_name])
+        # Sort by timestamp ascending (earliest first)
+        df_sorted = df.sort_values(by=[date_col_name], ascending=True)
         
-        comparison_data = []
+        comparison_results = []
         
         for staff_id, group in df_sorted.groupby('id pekerja'):
-            # The very first attempt is "Before"
-            before_score = group.iloc[0]['score_numeric']
-            depoh = group.iloc[0]['depoh']
+            # 1st Timestamp = Before
+            before_row = group.iloc[0]
+            before_score = before_row['score_numeric']
+            staff_name = before_row['nama penuh'] if 'nama penuh' in df.columns else "N/A"
+            depoh = before_row['depoh'] if 'depoh' in df.columns else "N/A"
             
-            # If there are more attempts, find the max of the remaining
-            after_score = None
-            if len(group) > 1:
-                after_score = group.iloc[1:]['score_numeric'].max()
+            # Submissions AFTER the 1st one
+            after_submissions = group.iloc[1:]
             
-            comparison_data.append({
-                'Staff ID': staff_id,
-                'Depoh': depoh,
-                'Before Score': before_score,
-                'After Score': after_score
+            if not after_submissions.empty:
+                # Take the HIGHEST score from the remaining recent entries
+                after_score = after_submissions['score_numeric'].max()
+            else:
+                after_score = None # No second attempt yet
+            
+            comparison_results.append({
+                "Staff ID": staff_id,
+                "Name": staff_name,
+                "Depoh": depoh,
+                "Before (1st Attempt)": before_score,
+                "After (Highest of Recent)": after_score
             })
-        
-        comp_df = pd.DataFrame(comparison_data)
+            
+        comp_df = pd.DataFrame(comparison_results)
 
-        # Calculate Averages for the table
-        avg_before = comp_df['Before Score'].mean()
-        avg_after = comp_df['After Score'].mean() # This ignores None values automatically
-
-        # --- DISPLAY TABLE ---
-        st.subheader("📝 Understanding SOP: Before vs After")
+        # --- DISPLAY SUMMARY TABLE ---
+        st.subheader("📋 Staff SOP Understanding: Before vs After")
+        st.write("Comparison based on first attempt vs. highest subsequent attempt.")
         
-        m1, m2 = st.columns(2)
-        m1.metric("Avg Score (Before)", f"{avg_before:.2f} / 5")
-        m2.metric("Avg Score (After - Best)", f"{avg_after:.2f} / 5" if not pd.isna(avg_after) else "N/A")
-        
+        # Displaying the comparison table
         st.dataframe(comp_df, hide_index=True, use_container_width=True)
+        
         st.divider()
 
-        # --- ORIGINAL DASHBOARD LOGIC ---
+    # --- DASHBOARD LOGIC (ORIGINAL) ---
+    if 'id pekerja' in df.columns and 'depoh' in df.columns:
         depoh_stats = df.groupby('depoh')['id pekerja'].nunique().reset_index()
         depoh_stats.columns = ['Depoh Name', 'Unique Staff Count']
 
@@ -125,8 +127,7 @@ try:
         st.subheader("Filtered Data Preview")
         st.dataframe(df, use_container_width=True)
     else:
-        st.error(f"Required columns (id pekerja, depoh, total score) not found!")
-        st.write("Current columns:", list(df.columns))
+        st.error(f"Columns 'id pekerja' and 'depoh' are required.")
 
 except Exception as e:
     st.error(f"Error: {e}")
