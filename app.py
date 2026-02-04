@@ -11,6 +11,7 @@ SHEETS_DICT = {
     "PENGOPERASIAN MESIN C360": None
 }
 
+# SCALING: Force full width layout
 st.set_page_config(page_title="Depoh Summary Dashboard", layout="wide")
 
 @st.cache_data(ttl=600)
@@ -43,7 +44,6 @@ raw_data = load_all_data()
 
 # --- SIDEBAR: DATE SELECTION & RESET ---
 st.sidebar.title("📅 Filters")
-
 all_dates = []
 for df in raw_data.values():
     if not df.empty and 'timestamp' in df.columns:
@@ -51,20 +51,12 @@ for df in raw_data.values():
 
 if all_dates:
     min_date, max_date = min(all_dates), max(all_dates)
-    
     if st.sidebar.button("🔄 Reset Dates"):
         st.session_state.date_range = (min_date, max_date)
         st.rerun()
-
     if 'date_range' not in st.session_state:
         st.session_state.date_range = (min_date, max_date)
-
-    selected_date_range = st.sidebar.date_input(
-        "Select Date Range:",
-        value=st.session_state.date_range,
-        min_value=min_date,
-        max_value=max_date
-    )
+    selected_date_range = st.sidebar.date_input("Select Date Range:", value=st.session_state.date_range, min_value=min_date, max_value=max_date)
     st.session_state.date_range = selected_date_range
 else:
     selected_date_range = None
@@ -91,9 +83,7 @@ if page_mode == "Main Summary":
     
     for name, df in filtered_data.items():
         if not df.empty:
-            # PRE: Earliest entry
             summary_dfs_pre[name] = df.sort_values('timestamp').groupby('id pekerja').first().reset_index()
-            # POST: Most recent entry
             summary_dfs_post[name] = df.sort_values('timestamp').groupby('id pekerja').last().reset_index()
         else:
             summary_dfs_pre[name] = df
@@ -119,7 +109,6 @@ if page_mode == "Main Summary":
         summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Sc'] / 25.0) * 100).round(1)
         
         p_cols = [f'p_{name}' for name in score_cols]
-        # ADDED: Total Post-Sc column calculation
         summary_table['Total Post-Sc'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% LULUS POST'] = ((summary_table['Total Post-Sc'] / 25.0) * 100).round(1)
 
@@ -129,13 +118,14 @@ if page_mode == "Main Summary":
         m2.metric("Avg Pre Score %", f"{summary_table['% LULUS PRE'].mean():.1f}%")
         m3.metric("Avg Post Score %", f"{summary_table['% LULUS POST'].mean():.1f}%")
 
-        # Table Display
+        # FIT VIEW TABLE: Show all vital columns at once
         st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE vs POST)")
         formatted_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
         
-        # Updated columns to include Total Post-Sc
+        # FIT VIEW: Grouping main columns for easier reading
         show_columns = ['ID', 'NAMA', 'DEPOH'] + score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']
         
+        # Scaling adjustment using st.dataframe with fit-width
         st.dataframe(
             formatted_df[show_columns].style.format({col: "{:.1f}" for col in score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']}), 
             use_container_width=True, hide_index=True
