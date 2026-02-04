@@ -65,22 +65,19 @@ def load_all_data():
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
     return all_dfs
 
-# --- HIGHLIGHTING LOGIC (Using Score, 50% Opacity) ---
 def highlight_merit(row):
     score = row['Total Post']
     color = '' 
-    
     if 0 <= score <= 5:
-        color = 'background-color: rgba(255, 0, 0, 0.5); color: white;'     # RED
+        color = 'background-color: rgba(255, 0, 0, 0.5); color: white;'
     elif 6 <= score <= 10:
-        color = 'background-color: rgba(255, 255, 0, 0.5); color: black;'   # YELLOW
+        color = 'background-color: rgba(255, 255, 0, 0.5); color: black;'
     elif 11 <= score <= 15:
-        color = 'background-color: rgba(255, 165, 0, 0.5); color: white;'   # ORANGE
+        color = 'background-color: rgba(255, 165, 0, 0.5); color: white;'
     elif 16 <= score <= 20:
-        color = 'background-color: rgba(0, 191, 255, 0.5); color: white;'   # BLUE
+        color = 'background-color: rgba(0, 191, 255, 0.5); color: white;'
     elif 21 <= score <= 25:
-        color = 'background-color: rgba(0, 128, 0, 0.5); color: white;'     # GREEN
-    
+        color = 'background-color: rgba(0, 128, 0, 0.5); color: white;'
     return [color] * len(row)
 
 raw_data = load_all_data()
@@ -110,117 +107,98 @@ page = st.sidebar.radio("Go to:", ["Main Summary", "Detailed View"])
 if page == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    valid_dfs_check = [df for df in filtered_data.values() if not df.empty]
-    
-    if not valid_dfs_check:
-        st.warning("⚠️ No data found for selected dates.")
-    else:
-        combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
-        attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
-        attempt_counts.columns = ['id pekerja', 'attempts']
-        attempt_counts['BIL'] = attempt_counts['attempts'].astype(str) + "x"
+    # Create Layout Columns: Left (70%) for content, Right (30%) for your future additions
+    main_col, spacer_col = st.columns([7, 3])
 
-        pre_dfs = {n: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() for n, df in filtered_data.items() if not df.empty}
-        post_dfs = {n: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() for n, df in filtered_data.items() if not df.empty}
-
-        all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in pre_dfs.values()]).drop_duplicates('id pekerja')
-        summary_table = pd.merge(all_staff, attempt_counts[['id pekerja', 'BIL']], on='id pekerja', how='left')
+    with main_col:
+        valid_dfs_check = [df for df in filtered_data.values() if not df.empty]
         
-        score_cols = list(SHEETS_DICT.keys())
-        for name in score_cols:
-            pre = pre_dfs.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
-            summary_table = pd.merge(summary_table, pre, on='id pekerja', how='left')
-            post = post_dfs.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'p_{name}'})
-            summary_table = pd.merge(summary_table, post, on='id pekerja', how='left')
-        
-        summary_table = summary_table.fillna(0.0)
-        summary_table['Total Pre'] = summary_table[score_cols].sum(axis=1).round(1)
-        summary_table['% PRE'] = ((summary_table['Total Pre'] / 25.0) * 100).round(1)
-        p_cols = [f'p_{name}' for name in score_cols]
-        summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
-        summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
+        if not valid_dfs_check:
+            st.warning("⚠️ No data found for selected dates.")
+        else:
+            combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
+            attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
+            attempt_counts.columns = ['id pekerja', 'attempts']
+            attempt_counts['BIL'] = attempt_counts['attempts'].astype(str) + "x"
 
-        # --- PROGRESS BARS ---
-        depoh_list = sorted(summary_table['depoh'].unique())
-        header_col, reset_col = st.columns([8, 2])
-        with header_col: st.markdown("<h2 style='color: #f1c40f;'>AVERAGE % SCORE BY DEPOH</h2>", unsafe_allow_html=True)
-        with reset_col:
-            if st.button("🔄 Reset Graph"):
-                st.session_state.selected_depoh = "All Depohs"
-                st.rerun()
+            pre_dfs = {n: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() for n, df in filtered_data.items() if not df.empty}
+            post_dfs = {n: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() for n, df in filtered_data.items() if not df.empty}
 
-        if 'selected_depoh' not in st.session_state: st.session_state.selected_depoh = "All Depohs"
-        selected_depoh = st.selectbox("Select Depoh:", ["All Depohs"] + depoh_list, key="selected_depoh")
+            all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in pre_dfs.values()]).drop_duplicates('id pekerja')
+            summary_table = pd.merge(all_staff, attempt_counts[['id pekerja', 'BIL']], on='id pekerja', how='left')
+            
+            score_cols = list(SHEETS_DICT.keys())
+            for name in score_cols:
+                pre = pre_dfs.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
+                summary_table = pd.merge(summary_table, pre, on='id pekerja', how='left')
+                post = post_dfs.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'p_{name}'})
+                summary_table = pd.merge(summary_table, post, on='id pekerja', how='left')
+            
+            summary_table = summary_table.fillna(0.0)
+            summary_table['Total Pre'] = summary_table[score_cols].sum(axis=1).round(1)
+            summary_table['% PRE'] = ((summary_table['Total Pre'] / 25.0) * 100).round(1)
+            p_cols = [f'p_{name}' for name in score_cols]
+            summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
+            summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
 
-        depoh_avgs = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=False)
-        for _, row in depoh_avgs.iterrows():
-            d_col, b_col, s_col = st.columns([1.1, 5, 2])
-            highlight = "border-right: 3px solid #f1c40f; color: #f1c40f;" if row['depoh'] == selected_depoh else "color: #ffffff;"
-            with d_col: st.markdown(f"<p class='depoh-label' style='{highlight}'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
-            with b_col: 
-                st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
-                st.progress(int(row['% POST']) / 100)
-                st.markdown("</div>", unsafe_allow_html=True)
-            with s_col: st.markdown(f"<div><span class='score-text'>{row['% POST']:.1f}%</span><br><span class='sub-text'>Avg Post Score</span></div>", unsafe_allow_html=True)
+            # --- PROGRESS BARS ---
+            st.markdown("<h2 style='color: #f1c40f;'>AVERAGE % SCORE BY DEPOH</h2>", unsafe_allow_html=True)
+            depoh_list = sorted(summary_table['depoh'].unique())
+            
+            if 'selected_depoh' not in st.session_state: st.session_state.selected_depoh = "All Depohs"
+            selected_depoh = st.selectbox("Select Depoh:", ["All Depohs"] + depoh_list, key="selected_depoh")
 
-        st.markdown("<br><hr><br>", unsafe_allow_html=True)
+            depoh_avgs = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=False)
+            for _, row in depoh_avgs.iterrows():
+                d_col, b_col, s_col = st.columns([1.5, 5, 2])
+                highlight = "border-right: 3px solid #f1c40f; color: #f1c40f;" if row['depoh'] == selected_depoh else "color: #ffffff;"
+                with d_col: st.markdown(f"<p class='depoh-label' style='{highlight}'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
+                with b_col: 
+                    st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
+                    st.progress(int(row['% POST']) / 100)
+                    st.markdown("</div>", unsafe_allow_html=True)
+                with s_col: st.markdown(f"<div><span class='score-text'>{row['% POST']:.1f}%</span><br><span class='sub-text'>Avg Post Score</span></div>", unsafe_allow_html=True)
 
-        # --- DATA TABLE ---
-        display_table = summary_table.copy()
-        if selected_depoh != "All Depohs": display_table = display_table[display_table['depoh'] == selected_depoh]
+            st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
-        st.subheader(f"SKOR PRA PENILAIAN KENDIRI FC 2025 ({selected_depoh})")
-        
-        final_df = display_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH', **SHORT_HEADERS})
-        short_names = list(SHORT_HEADERS.values())
-        show_cols = ['ID', 'NAMA', 'DEPOH', 'BIL'] + short_names + ['Total Pre', 'Total Post', '% PRE', '% POST']
-        
-        format_dict = {c: "{:.0f}" for c in short_names} 
-        format_dict.update({c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']})
-        
-        styled_df = final_df[show_cols].style.apply(highlight_merit, axis=1).format(format_dict)
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            # --- DATA TABLE ---
+            display_table = summary_table.copy()
+            if selected_depoh != "All Depohs": display_table = display_table[display_table['depoh'] == selected_depoh]
 
-        # --- UPDATED MERIT REFERENCE TABLE (Top to Bottom) ---
-        st.markdown("<br>", unsafe_allow_html=True)
-        col_merit_1, col_merit_2 = st.columns([1, 2])
-        with col_merit_1:
+            st.subheader(f"SKOR PRA PENILAIAN KENDIRI FC 2025 ({selected_depoh})")
+            
+            final_df = display_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH', **SHORT_HEADERS})
+            short_names = list(SHORT_HEADERS.values())
+            show_cols = ['ID', 'NAMA', 'DEPOH', 'BIL'] + short_names + ['Total Pre', 'Total Post', '% PRE', '% POST']
+            
+            format_dict = {c: "{:.0f}" for c in short_names} 
+            format_dict.update({c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']})
+            
+            styled_df = final_df[show_cols].style.apply(highlight_merit, axis=1).format(format_dict)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+            # --- MERIT REFERENCE TABLE ---
+            st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
-            <div class="merit-box">
+            <div class="merit-box" style="max-width: 400px;">
                 <table class="merit-table">
                     <tr style="background-color: #30363d;">
                         <th>Merit</th>
                         <th>Score</th>
                         <th>Percentage</th>
                     </tr>
-                    <tr>
-                        <td style="background-color: #008000; color: white; font-weight: bold;">SANGAT MAHIR</td>
-                        <td>21 - 25</td>
-                        <td>84 - 100%</td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #00bfff; color: white; font-weight: bold;">MAHIR</td>
-                        <td>16 - 20</td>
-                        <td>64 - 80%</td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #ffa500; color: black; font-weight: bold;">SEDERHANA MAHIR</td>
-                        <td>11 - 15</td>
-                        <td>44 - 60%</td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #ffff00; color: black; font-weight: bold;">TIDAK MAHIR</td>
-                        <td>6 - 10</td>
-                        <td>24 - 40%</td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #ff0000; color: white; font-weight: bold;">LEMAH</td>
-                        <td>0 - 5</td>
-                        <td>0 - 20%</td>
-                    </tr>
+                    <tr><td style="background-color: #008000; color: white; font-weight: bold;">SANGAT MAHIR</td><td>21 - 25</td><td>84 - 100%</td></tr>
+                    <tr><td style="background-color: #00bfff; color: white; font-weight: bold;">MAHIR</td><td>16 - 20</td><td>64 - 80%</td></tr>
+                    <tr><td style="background-color: #ffa500; color: black; font-weight: bold;">SEDERHANA MAHIR</td><td>11 - 15</td><td>44 - 60%</td></tr>
+                    <tr><td style="background-color: #ffff00; color: black; font-weight: bold;">TIDAK MAHIR</td><td>6 - 10</td><td>24 - 40%</td></tr>
+                    <tr><td style="background-color: #ff0000; color: white; font-weight: bold;">LEMAH</td><td>0 - 5</td><td>0 - 20%</td></tr>
                 </table>
             </div>
             """, unsafe_allow_html=True)
+
+    with spacer_col:
+        # This area is now reserved for your right-side content
+        st.write("") 
 
 else:
     selection = st.sidebar.selectbox("Select Detailed Sheet:", list(SHEETS_DICT.keys()))
