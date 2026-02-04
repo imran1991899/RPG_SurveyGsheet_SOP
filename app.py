@@ -28,11 +28,27 @@ st.markdown("""
         font-weight: bold; font-size: 14px; color: #ffffff; 
         margin-top: 10px; text-align: right; margin-right: -15px; 
     }
-    .stProgress > div > div > div > div { background-color: #f1c40f; }
     .score-text { font-size: 18px; font-weight: bold; color: #f1c40f; line-height: 1; }
     .sub-text { font-size: 11px; color: #bdc3c7; }
     .stDataFrame { border: 1px solid #34495e; }
     
+    /* Overlapping Bar CSS */
+    .bar-container {
+        width: 100%; background-color: #262730; height: 12px;
+        border-radius: 6px; position: relative; margin-top: 20px;
+    }
+    .bar-post {
+        height: 100%; background-color: #f1c40f; border-radius: 6px;
+        position: absolute; top: 0; left: 0; z-index: 1;
+    }
+    .bar-pre {
+        height: 100%; background-color: #e67e22; border-radius: 6px;
+        position: absolute; top: 0; left: 0; z-index: 2;
+    }
+    .increase-label {
+        color: #2ecc71; font-weight: bold; font-size: 14px; margin-left: 8px;
+    }
+
     /* Merit Table Styling */
     .merit-box {
         padding: 10px; border-radius: 5px; border: 1px solid #34495e;
@@ -137,7 +153,7 @@ if page == "Main Summary":
         summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
 
-        # --- NARROW SECTION: PROGRESS BARS & SPACE ---
+        # --- NARROW SECTION: OVERLAPPING PROGRESS BARS ---
         graph_col, spacer_col = st.columns([7, 3])
         
         with graph_col:
@@ -147,16 +163,32 @@ if page == "Main Summary":
             if 'selected_depoh' not in st.session_state: st.session_state.selected_depoh = "All Depohs"
             selected_depoh = st.selectbox("Select Depoh:", ["All Depohs"] + depoh_list, key="selected_depoh")
 
-            depoh_avgs = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=False)
-            for _, row in depoh_avgs.iterrows():
-                d_col, b_col, s_col = st.columns([1.5, 5, 2])
+            depoh_stats = summary_table.groupby('depoh').agg({'% PRE': 'mean', '% POST': 'mean'}).reset_index().sort_values('% POST', ascending=False)
+            
+            for _, row in depoh_stats.iterrows():
+                d_col, b_col, s_col = st.columns([1.5, 5, 2.5])
                 highlight = "border-right: 3px solid #f1c40f; color: #f1c40f;" if row['depoh'] == selected_depoh else "color: #ffffff;"
+                
+                # Calculation for increase
+                increase = row['% POST'] - row['% PRE']
+                inc_text = f"<span class='increase-label'>+{increase:.1f}%</span>" if increase > 0 else ""
+
                 with d_col: st.markdown(f"<p class='depoh-label' style='{highlight}'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
                 with b_col: 
-                    st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
-                    st.progress(int(row['% POST']) / 100)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                with s_col: st.markdown(f"<div><span class='score-text'>{row['% POST']:.1f}%</span><br><span class='sub-text'>Avg Post Score</span></div>", unsafe_allow_html=True)
+                    # Custom Overlapping HTML
+                    st.markdown(f"""
+                        <div class="bar-container">
+                            <div class="bar-post" style="width: {row['% POST']}%;"></div>
+                            <div class="bar-pre" style="width: {row['% PRE']}%;"></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with s_col: 
+                    st.markdown(f"""
+                        <div>
+                            <span class='score-text'>{row['% POST']:.1f}%</span>{inc_text}<br>
+                            <span class='sub-text'>Avg Post Score</span>
+                        </div>
+                    """, unsafe_allow_html=True)
 
         with spacer_col:
             st.subheader("📌 Key Metrics")
