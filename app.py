@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
 # 1. Configuration
 SHEETS_DICT = {
@@ -11,12 +10,12 @@ SHEETS_DICT = {
     "PENGOPERASIAN MESIN C360": None
 }
 
-# Mapping for shorter headers to save horizontal space
+# Mapping for short headers to ensure "Fit View"
 SHORT_HEADERS = {
     "Operasi Di Laluan": "M1:Laluan",
     "Bas Tamat Operasi - RPG": "M2:RPG",
-    "Peraturan Memperlahankan Pemanduan": "M3:Peraturan",
-    "PENGENDALIAN KEROSAKAN": "M4:Kerosakan",
+    "Peraturan Memperlahankan Pemanduan": "M3:Perat",
+    "PENGENDALIAN KEROSAKAN": "M4:Kerosak",
     "PENGOPERASIAN MESIN C360": "M5:Mesin"
 }
 
@@ -29,83 +28,81 @@ def load_all_data():
         if sheet_id is None:
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
             continue
-            
         url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
         try:
             temp_df = pd.read_csv(url)
             temp_df.columns = [str(c).lower().strip() for c in temp_df.columns]
-            
             if 'id pekerja' in temp_df.columns and 'total score' in temp_df.columns:
                 temp_df['score_num'] = temp_df['total score'].astype(str).str.split('/').str[0].astype(float).round(1)
-                
                 date_col = 'timestamp' if 'timestamp' in temp_df.columns else 'date'
                 if date_col in temp_df.columns:
                     temp_df['timestamp'] = pd.to_datetime(temp_df[date_col], errors='coerce')
                     temp_df = temp_df.dropna(subset=['timestamp'])
-                
                 all_dfs[name] = temp_df
-        except Exception:
+        except:
             all_dfs[name] = pd.DataFrame(columns=['id pekerja', 'nama penuh', 'depoh', 'score_num', 'timestamp'])
     return all_dfs
 
 raw_data = load_all_data()
 
-# --- SIDEBAR: DATE SELECTION & RESET ---
+# --- SIDEBAR: DATE SELECTION ---
 st.sidebar.title("📅 Filters")
 all_dates = []
 for df in raw_data.values():
-    if not df.empty and 'timestamp' in df.columns:
-        all_dates.extend(df['timestamp'].dt.date.tolist())
+    if not df.empty: all_dates.extend(df['timestamp'].dt.date.tolist())
 
 if all_dates:
-    min_date, max_date = min(all_dates), max(all_dates)
+    min_d, max_d = min(all_dates), max(all_dates)
     if st.sidebar.button("🔄 Reset Dates"):
-        st.session_state.date_range = (min_date, max_date)
+        st.session_state.date_range = (min_d, max_d)
         st.rerun()
-    if 'date_range' not in st.session_state:
-        st.session_state.date_range = (min_date, max_date)
-    selected_date_range = st.sidebar.date_input("Select Date Range:", value=st.session_state.date_range, min_value=min_date, max_value=max_date)
-    st.session_state.date_range = selected_date_range
+    if 'date_range' not in st.session_state: st.session_state.date_range = (min_d, max_d)
+    sel_range = st.sidebar.date_input("Select Date Range:", value=st.session_state.date_range, min_value=min_d, max_value=max_d)
+    st.session_state.date_range = sel_range
 else:
-    selected_date_range = None
+    sel_range = None
 
+# Filter Data
 filtered_data = {}
 for name, df in raw_data.items():
-    if not df.empty and 'timestamp' in df.columns and selected_date_range and len(selected_date_range) == 2:
-        start, end = selected_date_range
-        mask = (df['timestamp'].dt.date >= start) & (df['timestamp'].dt.date <= end)
+    if not df.empty and sel_range and len(sel_range) == 2:
+        mask = (df['timestamp'].dt.date >= sel_range[0]) & (df['timestamp'].dt.date <= sel_range[1])
         filtered_data[name] = df[mask]
     else:
         filtered_data[name] = df
 
-# --- NAVIGATION ---
-st.sidebar.divider()
-page_mode = st.sidebar.radio("Go to:", ["Main Summary", "Detailed Sheet View"])
+# --- MAIN SUMMARY ---
+page = st.sidebar.radio("Go to:", ["Main Summary", "Detailed View"])
 
-if page_mode == "Main Summary":
+if page == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    # Calculate global attempt counts
-    combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
-    attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
-    attempt_counts.columns = ['id pekerja', 'attempts']
-    attempt_counts['BIL'] = attempt_counts['attempts'].astype(str) + "x"
+    # FIX: Safety check to prevent the "No objects to concatenate" error
+    valid_dfs_raw = [df[['id pekerja']] for df in filtered_data.values() if not df.empty]
+    
+    if not valid_dfs_raw:
+        st.warning("⚠️ No data found for the selected date range. Please adjust the filters in the sidebar.")
+    else:
+        # Calculate Attempt Counts (BIL)
+        combined_raw = pd.concat(valid_dfs_raw)
+        attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
+        attempt_counts.columns = ['id pekerja', 'attempts']
+        attempt_counts['BIL'] = attempt_counts['attempts'].astype(str) + "x"
 
-    # PRE & POST Logic
-    summary_dfs_pre = {name: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() if not df.empty else df for name, df in filtered_data.items()}
-    summary_dfs_post = {name: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() if not df.empty else df for name, df in filtered_data.items()}
+        # PRE (First) and POST (Last) logic
+        summary_dfs_pre = {n: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() for n, df in filtered_data.items() if not df.empty}
+        summary_dfs_post = {n: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() for n, df in filtered_data.items() if not df.empty}
 
-    valid_dfs = [df for df in summary_dfs_pre.values() if not df.empty]
-    if valid_dfs:
-        all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in valid_dfs]).drop_duplicates('id pekerja')
+        # Build Table
+        all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in summary_dfs_pre.values()]).drop_duplicates('id pekerja')
         summary_table = pd.merge(all_staff, attempt_counts[['id pekerja', 'BIL']], on='id pekerja', how='left')
         
         score_cols = list(SHEETS_DICT.keys())
         for name in score_cols:
-            pre_score = summary_dfs_pre.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
-            summary_table = pd.merge(summary_table, pre_score, on='id pekerja', how='left')
-            post_score = summary_dfs_post.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'p_{name}'})
-            summary_table = pd.merge(summary_table, post_score, on='id pekerja', how='left')
+            pre = summary_dfs_pre.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
+            summary_table = pd.merge(summary_table, pre, on='id pekerja', how='left')
+            post = summary_dfs_post.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'p_{name}'})
+            summary_table = pd.merge(summary_table, post, on='id pekerja', how='left')
         
         summary_table = summary_table.fillna(0.0)
         summary_table['Total Pre'] = summary_table[score_cols].sum(axis=1).round(1)
@@ -114,33 +111,16 @@ if page_mode == "Main Summary":
         summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
 
-        st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE vs POST)")
+        # Apply short headers for Fit View
+        final_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH', **SHORT_HEADERS})
+        short_names = list(SHORT_HEADERS.values())
+        show_cols = ['ID', 'NAMA', 'DEPOH', 'BIL'] + short_names + ['Total Pre', 'Total Post', '% PRE', '% POST']
         
-        # Rename for display to save space
-        final_df = summary_table.rename(columns={
-            'id pekerja': 'ID', 
-            'nama penuh': 'NAMA', 
-            'depoh': 'DEPOH',
-            **SHORT_HEADERS
-        })
-        
-        # Select and order columns for compact view
-        short_col_names = list(SHORT_HEADERS.values())
-        show_columns = ['ID', 'NAMA', 'DEPOH', 'BIL'] + short_col_names + ['Total Pre', 'Total Post', '% PRE', '% POST']
-        
-        # Formatting to 0 decimal places for module scores to save even more space
-        format_dict = {col: "{:.0f}" for col in short_col_names}
-        format_dict.update({col: "{:.1f}" for col in ['Total Pre', 'Total Post', '% PRE', '% POST']})
-
+        # Display Table with automatic width scaling
         st.dataframe(
-            final_df[show_columns].style.format(format_dict), 
-            use_container_width=True, 
-            hide_index=True
+            final_df[show_cols].style.format({c: "{:.0f}" for c in short_names} | {c: "{:.1f}" for c in ['Total Pre', 'Total Post', '% PRE', '% POST']}),
+            use_container_width=True, hide_index=True
         )
-    else:
-        st.info("No data available.")
+
 else:
-    selection = st.sidebar.selectbox("Select Detailed Sheet:", list(SHEETS_DICT.keys()))
-    df_view = filtered_data.get(selection, pd.DataFrame())
-    if not df_view.empty:
-        st.dataframe(df_view.style.format({"score_num": "{:.1f}"}), use_container_width=True)
+    st.info("Select a sheet in the sidebar to view details.")
