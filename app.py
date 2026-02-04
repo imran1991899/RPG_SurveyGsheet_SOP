@@ -10,7 +10,6 @@ SHEETS_DICT = {
     "PENGOPERASIAN MESIN C360": None
 }
 
-# Short headers for the table to prevent horizontal scrolling
 SHORT_HEADERS = {
     "Operasi Di Laluan": "M1:Laluan",
     "Bas Tamat Operasi - RPG": "M2:RPG",
@@ -29,7 +28,6 @@ st.markdown("""
     .stProgress > div > div > div > div { background-color: #f1c40f; }
     .score-text { font-size: 18px; font-weight: bold; color: #f1c40f; line-height: 1; }
     .sub-text { font-size: 11px; color: #bdc3c7; }
-    /* Table Styling */
     .stDataFrame { border: 1px solid #34495e; }
     </style>
     """, unsafe_allow_html=True)
@@ -58,7 +56,7 @@ def load_all_data():
 
 raw_data = load_all_data()
 
-# --- SIDEBAR: DATE SELECTION & RESET ---
+# --- SIDEBAR: DATE SELECTION ---
 st.sidebar.title("📅 Filters")
 all_dates = []
 for df in raw_data.values():
@@ -75,7 +73,6 @@ if all_dates:
 else:
     sel_range = None
 
-# Filter Logic
 filtered_data = {}
 for name, df in raw_data.items():
     if not df.empty and sel_range and len(sel_range) == 2:
@@ -84,80 +81,86 @@ for name, df in raw_data.items():
     else:
         filtered_data[name] = df
 
-# --- PAGE MODE ---
 page = st.sidebar.radio("Go to:", ["Main Summary", "Detailed View"])
 
 if page == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    # Check for empty filtered data to avoid concatenation errors
     valid_dfs_check = [df for df in filtered_data.values() if not df.empty]
     
     if not valid_dfs_check:
         st.warning("⚠️ No data found for the selected date range.")
     else:
-        # 1. Calculate BIL PERCUBAAN
+        # Data Processing
         combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
         attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
         attempt_counts.columns = ['id pekerja', 'attempts']
         attempt_counts['BIL'] = attempt_counts['attempts'].astype(str) + "x"
 
-        # 2. Logic for PRE (Earliest) and POST (Latest)
         summary_dfs_pre = {n: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() for n, df in filtered_data.items() if not df.empty}
         summary_dfs_post = {n: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() for n, df in filtered_data.items() if not df.empty}
 
-        # 3. Create Master Summary Table
         all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in summary_dfs_pre.values()]).drop_duplicates('id pekerja')
         summary_table = pd.merge(all_staff, attempt_counts[['id pekerja', 'BIL']], on='id pekerja', how='left')
         
         score_cols = list(SHEETS_DICT.keys())
         for name in score_cols:
-            # Add Pre-scores
             pre = summary_dfs_pre.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': name})
             summary_table = pd.merge(summary_table, pre, on='id pekerja', how='left')
-            # Add Post-scores (prefixed with p_)
             post = summary_dfs_post.get(name, pd.DataFrame(columns=['id pekerja', 'score_num']))[['id pekerja', 'score_num']].rename(columns={'score_num': f'p_{name}'})
             summary_table = pd.merge(summary_table, post, on='id pekerja', how='left')
         
         summary_table = summary_table.fillna(0.0)
-        
-        # 4. Totals and Percentages
         summary_table['Total Pre'] = summary_table[score_cols].sum(axis=1).round(1)
         summary_table['% PRE'] = ((summary_table['Total Pre'] / 25.0) * 100).round(1)
-        
         p_cols = [f'p_{name}' for name in score_cols]
         summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
         summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
 
-        # --- DIAGRAM: THE YELLOW PROGRESS BAR DESIGN ---
-        st.markdown("<h2 style='text-align: center; color: #f1c40f; margin-bottom: 30px;'>AVERAGE % SCORE BY DEPOH</h2>", unsafe_allow_html=True)
+        # --- NEW INTERACTIVE SECTION: DEPOH GRAPH SELECTION ---
+        depoh_list = sorted(summary_table['depoh'].unique())
         
+        # Reset button beside graph title
+        header_col, reset_col = st.columns([8, 2])
+        with header_col:
+            st.markdown("<h2 style='color: #f1c40f;'>AVERAGE % SCORE BY DEPOH</h2>", unsafe_allow_html=True)
+        with reset_col:
+            if st.button("🔄 Reset Graph Selection"):
+                st.session_state.selected_depoh = "All Depohs"
+                st.rerun()
+
+        if 'selected_depoh' not in st.session_state:
+            st.session_state.selected_depoh = "All Depohs"
+
+        # Interactive Dropdown that syncs with graph
+        selected_depoh = st.selectbox("Select Depoh to Filter Table:", ["All Depohs"] + depoh_list, key="selected_depoh")
+
         depoh_avgs = summary_table.groupby('depoh')['% POST'].mean().reset_index().sort_values('% POST', ascending=False)
         
         for _, row in depoh_avgs.iterrows():
-            # Creating the row layout: Name | Progress Bar | Score
             d_col, b_col, s_col = st.columns([2, 5, 2])
+            # Highlight labels if selected
+            label_style = "color: #f1c40f; border-left: 3px solid #f1c40f; padding-left: 10px;" if row['depoh'] == selected_depoh else "color: #ffffff;"
+            
             with d_col:
-                st.markdown(f"<p class='depoh-label'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p class='depoh-label' style='{label_style}'>{row['depoh'].upper()}</p>", unsafe_allow_html=True)
             with b_col:
                 st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
                 st.progress(int(row['% POST']) / 100)
                 st.markdown("</div>", unsafe_allow_html=True)
             with s_col:
-                st.markdown(f"""
-                    <div>
-                        <span class='score-text'>{row['% POST']:.1f}%</span><br>
-                        <span class='sub-text'>Average Post Score</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                st.markdown(f"<span class='score-text'>{row['% POST']:.1f}%</span><br><span class='sub-text'>Average Post Score</span>", unsafe_allow_html=True)
 
         st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
-        # --- TABLE: FULL FIT VIEW ---
-        st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE vs POST)")
+        # --- FILTERED TABLE VIEW ---
+        st.subheader(f"DATASET: {selected_depoh}")
         
-        # Prepare for display
-        final_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH', **SHORT_HEADERS})
+        display_table = summary_table.copy()
+        if selected_depoh != "All Depohs":
+            display_table = display_table[display_table['depoh'] == selected_depoh]
+
+        final_df = display_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH', **SHORT_HEADERS})
         short_names = list(SHORT_HEADERS.values())
         show_cols = ['ID', 'NAMA', 'DEPOH', 'BIL'] + short_names + ['Total Pre', 'Total Post', '% PRE', '% POST']
         
