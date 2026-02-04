@@ -11,6 +11,15 @@ SHEETS_DICT = {
     "PENGOPERASIAN MESIN C360": None
 }
 
+# Mapping for shorter headers to save horizontal space
+SHORT_HEADERS = {
+    "Operasi Di Laluan": "M1:Laluan",
+    "Bas Tamat Operasi - RPG": "M2:RPG",
+    "Peraturan Memperlahankan Pemanduan": "M3:Peraturan",
+    "PENGENDALIAN KEROSAKAN": "M4:Kerosakan",
+    "PENGOPERASIAN MESIN C360": "M5:Mesin"
+}
+
 st.set_page_config(page_title="Depoh Summary Dashboard", layout="wide")
 
 @st.cache_data(ttl=600)
@@ -76,21 +85,20 @@ page_mode = st.sidebar.radio("Go to:", ["Main Summary", "Detailed Sheet View"])
 if page_mode == "Main Summary":
     st.title("📋 Master SOP Summary Dashboard")
     
-    # Calculate global attempt counts before grouping
+    # Calculate global attempt counts
     combined_raw = pd.concat([df[['id pekerja']] for df in filtered_data.values() if not df.empty])
     attempt_counts = combined_raw.value_counts('id pekerja').reset_index()
     attempt_counts.columns = ['id pekerja', 'attempts']
-    attempt_counts['BIL PERCUBAAN'] = attempt_counts['attempts'].astype(str) + "x"
+    attempt_counts['BIL'] = attempt_counts['attempts'].astype(str) + "x"
 
-    # PRE Logic (Earliest attempt)
+    # PRE & POST Logic
     summary_dfs_pre = {name: df.sort_values('timestamp').groupby('id pekerja').first().reset_index() if not df.empty else df for name, df in filtered_data.items()}
-    # POST Logic (Recent Attempt)
     summary_dfs_post = {name: df.sort_values('timestamp').groupby('id pekerja').last().reset_index() if not df.empty else df for name, df in filtered_data.items()}
 
     valid_dfs = [df for df in summary_dfs_pre.values() if not df.empty]
     if valid_dfs:
         all_staff = pd.concat([df[['id pekerja', 'nama penuh', 'depoh']] for df in valid_dfs]).drop_duplicates('id pekerja')
-        summary_table = pd.merge(all_staff, attempt_counts[['id pekerja', 'BIL PERCUBAAN']], on='id pekerja', how='left')
+        summary_table = pd.merge(all_staff, attempt_counts[['id pekerja', 'BIL']], on='id pekerja', how='left')
         
         score_cols = list(SHEETS_DICT.keys())
         for name in score_cols:
@@ -100,21 +108,34 @@ if page_mode == "Main Summary":
             summary_table = pd.merge(summary_table, post_score, on='id pekerja', how='left')
         
         summary_table = summary_table.fillna(0.0)
-        summary_table['Total Pre-Sc'] = summary_table[score_cols].sum(axis=1).round(1)
-        summary_table['% LULUS PRE'] = ((summary_table['Total Pre-Sc'] / 25.0) * 100).round(1)
+        summary_table['Total Pre'] = summary_table[score_cols].sum(axis=1).round(1)
+        summary_table['% PRE'] = ((summary_table['Total Pre'] / 25.0) * 100).round(1)
         p_cols = [f'p_{name}' for name in score_cols]
-        summary_table['Total Post-Sc'] = summary_table[p_cols].sum(axis=1).round(1)
-        summary_table['% LULUS POST'] = ((summary_table['Total Post-Sc'] / 25.0) * 100).round(1)
+        summary_table['Total Post'] = summary_table[p_cols].sum(axis=1).round(1)
+        summary_table['% POST'] = ((summary_table['Total Post'] / 25.0) * 100).round(1)
 
         st.subheader("SKOR PRA PENILAIAN KENDIRI FC 2025 (PRE vs POST)")
-        formatted_df = summary_table.rename(columns={'id pekerja': 'ID', 'nama penuh': 'NAMA', 'depoh': 'DEPOH'})
         
-        # Adding BIL PERCUBAAN to the column list
-        show_columns = ['ID', 'NAMA', 'DEPOH', 'BIL PERCUBAAN'] + score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']
+        # Rename for display to save space
+        final_df = summary_table.rename(columns={
+            'id pekerja': 'ID', 
+            'nama penuh': 'NAMA', 
+            'depoh': 'DEPOH',
+            **SHORT_HEADERS
+        })
         
+        # Select and order columns for compact view
+        short_col_names = list(SHORT_HEADERS.values())
+        show_columns = ['ID', 'NAMA', 'DEPOH', 'BIL'] + short_col_names + ['Total Pre', 'Total Post', '% PRE', '% POST']
+        
+        # Formatting to 0 decimal places for module scores to save even more space
+        format_dict = {col: "{:.0f}" for col in short_col_names}
+        format_dict.update({col: "{:.1f}" for col in ['Total Pre', 'Total Post', '% PRE', '% POST']})
+
         st.dataframe(
-            formatted_df[show_columns].style.format({col: "{:.1f}" for col in score_cols + ['Total Pre-Sc', 'Total Post-Sc', '% LULUS PRE', '% LULUS POST']}), 
-            use_container_width=True, hide_index=True
+            final_df[show_columns].style.format(format_dict), 
+            use_container_width=True, 
+            hide_index=True
         )
     else:
         st.info("No data available.")
